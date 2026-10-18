@@ -167,4 +167,17 @@ public static class SyntheticCaptures
         m.Items.Add(new ItemDefinition { Prefab = "Fixture_NoIcon", Name = "Icon-less fixture item", Category = "Misc", MaxStack = 1, MaxQuality = 1, Variants = 0, Icon = null });
         return m;
     }
+
+    /// <summary>File-backed icons, one with the additive `blob` ref (contract 2026-10-18) and one without.</summary>
+    public static ItemsMessage ItemsFileIcons(byte[] iconPng)
+    {
+        var m = new ItemsMessage
+        {
+            ServerId = ServerId, CapturedAt = CapturedAt, GameVersion = GameVersion, ModVersion = ModVersion,
+            Locale = "English", Atlas = null,
+        };
+        m.Items.Add(new ItemDefinition { Prefab = "SwordBronze", Name = "Bronze sword", Category = "OneHandedWeapon", MaxStack = 1, MaxQuality = 4, Variants = 0, Icon = ItemIcon.FromFile("SwordBronze.png", Png.MakeRef(iconPng)) });
+        m.Items.Add(new ItemDefinition { Prefab = "Wood", Name = "Wood", Category = "Material", MaxStack = 50, MaxQuality = 1, Variants = 0, Icon = ItemIcon.FromFile("Wood.png") });
+        return m;
+    }
 }

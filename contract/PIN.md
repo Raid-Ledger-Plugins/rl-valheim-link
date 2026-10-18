@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Pinned from commit | `6aa64d9657b639b4284b13b6d0c1e2194ee79e82` (main, 2026-10-18) |
+| Pinned from commit | `0c5b6df063d85d98349442bbd08fe2f53ac8d4f7` (main, 2026-10-18) |
 | Upstream URL | https://raw.githubusercontent.com/sjdodge123/Raid-Ledger/main/packages/contract/valheim-link/v1/ |
 | Drift check | `tools/contract-check/drift-check.sh` (CI job `contract-drift`) |
 
