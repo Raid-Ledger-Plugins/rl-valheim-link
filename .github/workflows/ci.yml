@@ -44,4 +44,4 @@ jobs:
       - name: mock-ingest accepts the fixtures and enforces token / serverId / caps / 429
         run: cd tools/mock-ingest && npm ci --no-audit --no-fund && npm test
       - name: Record
-        run: echo "fixture validation: ajv + CSharp validator + mock-ingest all ran" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "fixture validation (ajv + CSharp validator + mock-ingest) ran" >> "$GITHUB_STEP_SUMMARY"
