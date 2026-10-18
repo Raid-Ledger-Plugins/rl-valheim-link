@@ -60,7 +60,7 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
    `RLVL: items (count=<n> atlas=<bytes> bytes) exported in <ms> ms; <bytes> bytes JSON, <bytes> bytes gzip`
    `RLVL: queued items: transfer #5 Items …` and the two `sent …` lines.
    Paste back: the item count, the atlas size line, and whether the game hitched noticeably (how long).
-   A line `RLVL: atlas at 64 px is <bytes> bytes (> 16 MiB); retrying smaller` is fine; paste it too.
+   A line `RLVL: atlas at 64 px is <bytes> bytes (> Upload.MaxBlobBytes <n>); retrying smaller` is fine; paste it too.
 
 ## E. Opt-out
 

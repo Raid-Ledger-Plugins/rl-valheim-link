@@ -89,8 +89,9 @@ namespace RlValheimLink.Client
                 t.Start();
                 while (t.IsAlive) yield return null;
                 if (err != null) { Log.Error("atlas PNG encode failed", err); break; }
-                if (encoded.Length <= Caps.BinaryMaxBytes) { png = encoded; atlasRef = Png.MakeRef(png); break; }
-                Log.Warn($"atlas at {size} px is {encoded.Length} bytes (> 16 MiB); retrying smaller");
+                int maxBlob = Math.Min(Caps.BinaryMaxBytes, PluginConfig.UploadMaxBlobBytes.Value);
+                if (encoded.Length <= maxBlob) { png = encoded; atlasRef = Png.MakeRef(png); break; }
+                Log.Warn($"atlas at {size} px is {encoded.Length} bytes (> Upload.MaxBlobBytes {maxBlob}); retrying smaller");
                 size = size >= 64 ? 48 : size >= 48 ? 32 : size >= 32 ? 16 : 0;
             }
             if (png == null) foreach (var e in entries) e.Def.Icon = null;

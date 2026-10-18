@@ -8,7 +8,7 @@ namespace RlValheimLink
         // [RaidLedger] — server side
         public static ConfigEntry<string> BaseUrl, ServerToken, ServerId, MessagesPath, BlobsPath;
         // [Upload]
-        public static ConfigEntry<int> UploadIntervalSeconds, UploadMaxPerMinute;
+        public static ConfigEntry<int> UploadIntervalSeconds, UploadMaxMessagesPerMinute, UploadMaxBlobsPerMinute, UploadMaxBlobBytes;
         public static ConfigEntry<bool> UploadGzip;
         public static ConfigEntry<string> SpoolDirectory;
         // [Server]
@@ -28,11 +28,13 @@ namespace RlValheimLink
             BaseUrl = cfg.Bind("RaidLedger", "BaseUrl", "", "Server only. Raid Ledger base URL, e.g. https://raid.gamernight.net (no trailing slash). Empty = uploads off.");
             ServerToken = cfg.Bind("RaidLedger", "ServerToken", "", "Server only. Per-server bearer token issued by Raid Ledger admin for THIS game server. Never logged.");
             ServerId = cfg.Bind("RaidLedger", "ServerId", "", "Server only. Raid Ledger's id for this game server, issued with the token; goes into every message.");
-            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/valheim-link/messages", "Server only. POST route for messages (until ROK-1833 fixes it).");
-            BlobsPath = cfg.Bind("RaidLedger", "BlobsPath", "/api/valheim-link/blobs/{sha256}", "Server only. PUT route for PNG blobs; {sha256} is replaced.");
+            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items (ROK-1833). Change only to point at a mock on another path.");
+            BlobsPath = cfg.Bind("RaidLedger", "BlobsPath", "/api/plugins/valheim/link/blobs/{sha256}", "Server only. PUT route for PNG blobs; {sha256} is replaced (ROK-1833).");
 
             UploadIntervalSeconds = cfg.Bind("Upload", "IntervalSeconds", 5, new ConfigDescription("Server only. Minimum seconds between HTTP requests to Raid Ledger.", new AcceptableValueRange<int>(1, 600)));
-            UploadMaxPerMinute = cfg.Bind("Upload", "MaxPerMinute", 20, new ConfigDescription("Server only. Request budget per minute (messages + blobs).", new AcceptableValueRange<int>(1, 120)));
+            UploadMaxMessagesPerMinute = cfg.Bind("Upload", "MaxMessagesPerMinute", 30, new ConfigDescription("Server only. Self-imposed message POSTs per minute; Raid Ledger allows 60 per server before 429.", new AcceptableValueRange<int>(1, 60)));
+            UploadMaxBlobsPerMinute = cfg.Bind("Upload", "MaxBlobsPerMinute", 10, new ConfigDescription("Server only. Self-imposed blob PUTs per minute; Raid Ledger allows 20 per server before 429.", new AcceptableValueRange<int>(1, 20)));
+            UploadMaxBlobBytes = cfg.Bind("Upload", "MaxBlobBytes", 10 * 1024 * 1024, new ConfigDescription("Largest PNG the mod will upload (bytes). 10 MiB while Raid Ledger's nginx caps bodies there (ROK-1850); the contract allows 16 MiB. Also bounds the client's atlas.", new AcceptableValueRange<int>(1024 * 1024, 16 * 1024 * 1024)));
             UploadGzip = cfg.Bind("Upload", "Gzip", true, "Server only. Send message bodies with Content-Encoding: gzip.");
             SpoolDirectory = cfg.Bind("Upload", "SpoolDirectory", "", "Server only. Pending uploads + blob cache. Empty = <BepInEx>/RLValheimLink/spool.");
 
