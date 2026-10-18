@@ -34,9 +34,9 @@ jobs:
           node validate.mjs ../../contract/v1/fixtures
           node validate.mjs ../../fixtures
           node validate.mjs --expect-invalid ../../contract/v1/fixtures/invalid
-      - name: C# pre-send validator — tests (golden pass, invalid rejected per EXPECTED.json, fixtures reproduce)
+      - name: CSharp pre-send validator — tests (golden pass, invalid rejected per EXPECTED.json, fixtures reproduce)
         run: dotnet test tests/RlValheimLink.Contract.Tests -nologo
-      - name: C# pre-send validator — CLI over fixtures (with bitmap inflate) and the invalid set
+      - name: CSharp pre-send validator — CLI over fixtures (with bitmap inflate) and the invalid set
         run: |
           dotnet run --project tools/validate-cli -- --inflate fixtures
           dotnet run --project tools/validate-cli -- --inflate contract/v1/fixtures
@@ -44,7 +44,8 @@ jobs:
       - name: mock-ingest accepts the fixtures and enforces token / serverId / caps / 429
         run: cd tools/mock-ingest && npm ci --no-audit --no-fund && npm test
       - name: Record
-        run: echo "fixture validation: ajv + C# validator + mock-ingest all ran" >> "$GITHUB_STEP_SUMMARY"
+<<<<<<< HEAD
+        run: echo "fixture validation: ajv + CSharp validator + mock-ingest all ran" >> "$GITHUB_STEP_SUMMARY"
 
   # 3. Compile the plugin when game assemblies can be provided (ValheimGameLibs on NuGet).
   #    Restore failure = skipped (recorded), not a red build; a COMPILE error is red.
@@ -82,3 +83,6 @@ jobs:
             src/RlValheimLink/bin/Release/net472/RlValheimLink.dll
             src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll
           if-no-files-found: error
+=======
+        run: echo "fixture validation: ajv + CSharp validator + mock-ingest all ran" >> "$GITHUB_STEP_SUMMARY"
+>>>>>>> feat/contract-lib
