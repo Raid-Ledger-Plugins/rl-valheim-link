@@ -32,14 +32,25 @@ namespace RlValheimLink.Contract
             return cells;
         }
 
-        /// <summary>One gzip member, FLG = 0 (what GZipStream writes), then standard padded base64.</summary>
+        /// <summary>
+        /// One gzip member, FLG = 0 (what GZipStream writes), then standard padded base64. The header's
+        /// MTIME, XFL and OS bytes are normalised (0, 0, 3) so the same bitset encodes identically on
+        /// every platform; RFC 1952 leaves them free and the contract only checks magic + FLG.
+        /// </summary>
         public static string GzipBase64(byte[] raw)
         {
             using (var ms = new MemoryStream())
             {
                 using (var gz = new GZipStream(ms, CompressionLevel.Optimal, leaveOpen: true))
                     gz.Write(raw, 0, raw.Length);
-                return Convert.ToBase64String(ms.ToArray());
+                var bytes = ms.ToArray();
+                if (bytes.Length >= 10 && bytes[0] == 0x1f && bytes[1] == 0x8b && bytes[2] == 8 && bytes[3] == 0)
+                {
+                    bytes[4] = bytes[5] = bytes[6] = bytes[7] = 0; // MTIME
+                    bytes[8] = 0;                                  // XFL
+                    bytes[9] = 3;                                  // OS = Unix
+                }
+                return Convert.ToBase64String(bytes);
             }
         }
 

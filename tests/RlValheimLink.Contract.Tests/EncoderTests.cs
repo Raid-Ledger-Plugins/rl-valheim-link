@@ -49,6 +49,7 @@ public class EncoderTests
         var gz = Convert.FromBase64String(Bitset.GzipBase64(new byte[512]));
         Assert.Equal(0x1f, gz[0]); Assert.Equal(0x8b, gz[1]); Assert.Equal(8, gz[2]);
         Assert.Equal(0, gz[3]); // FLG = 0: no name, comment, extra or header CRC
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 0, 3 }, gz.Skip(4).Take(6).ToArray()); // MTIME/XFL/OS normalised for cross-platform determinism
     }
 
     [Fact]

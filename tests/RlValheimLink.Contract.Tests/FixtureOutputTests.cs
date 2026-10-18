@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace RlValheimLink.Contract.Tests;
@@ -62,7 +63,22 @@ public class FixtureOutputTests
             File.WriteAllBytes(path, bytes);
         }
         Assert.True(File.Exists(path), $"{file} missing: run with RLVL_WRITE_FIXTURES=1");
-        Assert.Equal(File.ReadAllBytes(path), bytes);
+        var committed = File.ReadAllBytes(path);
+        if (committed.AsSpan().SequenceEqual(bytes)) return;
+        // A different zlib build may emit a different (still valid) deflate stream for the same bitset:
+        // compare map bitmaps by decoded content and everything else byte for byte.
+        Assert.True(JToken.DeepEquals(Canonical(committed), Canonical(bytes)),
+            $"{file} differs from the writer's output beyond bitmap compression: regenerate with RLVL_WRITE_FIXTURES=1");
+    }
+
+    static JToken Canonical(byte[] json)
+    {
+        var tok = (JObject)MessageJson.Parse(json);
+        if ((string)tok["kind"] != "map") return tok;
+        foreach (var key in new[] { "explored", "sharedExplored" })
+            if (tok[key] is JObject b)
+                b["data"] = Png.Sha256Hex(Bitset.Decode((string)b["data"], (int)b["width"], (int)b["height"]));
+        return tok;
     }
 
     [Fact]
