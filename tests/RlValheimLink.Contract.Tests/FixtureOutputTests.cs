@@ -16,6 +16,7 @@ public class FixtureOutputTests
         yield return new object[] { "map-personal.json", (Func<LinkMessage>)(() => SyntheticCaptures.MapPersonal()) };
         yield return new object[] { "map-shared-layer.json", (Func<LinkMessage>)(() => SyntheticCaptures.MapSharedLayer()) };
         yield return new object[] { "items-atlas.json", (Func<LinkMessage>)(() => SyntheticCaptures.ItemsAtlas(AtlasBytes())) };
+        yield return new object[] { "items-file-icons.json", (Func<LinkMessage>)(() => SyntheticCaptures.ItemsFileIcons(AtlasBytes())) };
     }
 
     static bool Writing => Environment.GetEnvironmentVariable("RLVL_WRITE_FIXTURES") == "1";
@@ -62,6 +63,18 @@ public class FixtureOutputTests
         }
         Assert.True(File.Exists(path), $"{file} missing: run with RLVL_WRITE_FIXTURES=1");
         Assert.Equal(File.ReadAllBytes(path), bytes);
+    }
+
+    [Fact]
+    public void File_icon_blob_is_optional_and_omitted_when_absent()
+    {
+        var msg = SyntheticCaptures.ItemsFileIcons(AtlasBytes());
+        var json = MessageJson.Serialize(msg);
+        Assert.Contains("\"file\":\"SwordBronze.png\",\"blob\":{\"sha256\":", json);
+        Assert.Contains("\"file\":\"Wood.png\"}", json);
+        Assert.Empty(Validator.Validate(msg));
+        msg.Items[0].Icon.Blob.Sha256 = "nope";
+        Assert.Contains(Validator.Validate(msg), i => i.Path == "items.0.icon.blob.sha256" && i.Code == "invalid_format");
     }
 
     [Fact]

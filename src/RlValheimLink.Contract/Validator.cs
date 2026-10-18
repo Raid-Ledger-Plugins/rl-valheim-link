@@ -304,7 +304,7 @@ namespace RlValheimLink.Contract
         private static bool BinaryRef(JObject b, string path, List<ValidationIssue> issues, out int w, out int h)
         {
             Keys(b, path, issues, "sha256", "byteLength", "contentType", "width", "height");
-            Str(b, "sha256", path, issues, 64, 64, Sha256);
+            Str(b, "sha256", path, issues, 1, null, Sha256);
             Int(b, "byteLength", path, issues, 1, Caps.BinaryMaxBytes, out _);
             if (Str(b, "contentType", path, issues, 1, null, null, out string ct) && ct != "image/png")
                 issues.Add(new ValidationIssue(path + ".contentType", "invalid_value", "contentType must be image/png"));
@@ -363,8 +363,10 @@ namespace RlValheimLink.Contract
                     }
                     else if (ik == "file")
                     {
-                        Keys(ic, ip, issues, "kind", "file");
+                        Keys(ic, ip, issues, "kind", "file", "blob");
                         Str(ic, "file", ip, issues, 5, 104, IconFile);
+                        var blob = ic["blob"];
+                        if (blob != null && ObjAt(blob, ip + ".blob", issues, out JObject bl)) BinaryRef(bl, ip + ".blob", issues, out _, out _);
                     }
                     else issues.Add(new ValidationIssue(ip + ".kind", "invalid_union", "icon kind must be atlas or file"));
                 }

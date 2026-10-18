@@ -186,8 +186,10 @@ namespace RlValheimLink.Contract
         [JsonProperty("w", Order = 3, NullValueHandling = NullValueHandling.Ignore)] public int? W { get; set; }
         [JsonProperty("h", Order = 4, NullValueHandling = NullValueHandling.Ignore)] public int? H { get; set; }
         [JsonProperty("file", Order = 5, NullValueHandling = NullValueHandling.Ignore)] public string File { get; set; }
+        /// <summary>Optional on a file icon (additive, contract 2026-10-18): the uploaded PNG's binary ref. Omitted when null; the server then leaves the icon unresolved.</summary>
+        [JsonProperty("blob", Order = 6, NullValueHandling = NullValueHandling.Ignore)] public BinaryRef Blob { get; set; }
 
         public static ItemIcon Atlas(int x, int y, int w, int h) => new ItemIcon { Kind = "atlas", X = x, Y = y, W = w, H = h };
-        public static ItemIcon FromFile(string file) => new ItemIcon { Kind = "file", File = file };
+        public static ItemIcon FromFile(string file, BinaryRef blob = null) => new ItemIcon { Kind = "file", File = file, Blob = blob };
     }
 }
