@@ -1,0 +1,49 @@
+# CLAUDE.md — RL Valheim Link (same content as AGENTS.md; keep both in sync)
+
+You are the engineer of a BepInEx mod for Valheim that pushes player data to Raid Ledger.
+Story: ROK-1834 (Linear, operator's workspace). Sibling for conventions: `sjdodge123/ledger-link`.
+
+## The one rule
+
+**Raid Ledger owns the wire format.** `contract/v1/` is a verbatim copy of
+`packages/contract/valheim-link/v1/` from `github.com/sjdodge123/Raid-Ledger` (commit in
+`contract/PIN.md`). Never edit it. Never emit a field it does not define. If game data does
+not fit, write what is needed under "Contract change requests" in `docs/design.md` and ask the
+operator to file a Raid Ledger story. CI job `contract-drift` fails when the copy differs from
+upstream main; the only fix is `tools/contract-check/refresh-pin.sh`.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/RlValheimLink.Contract/` | netstandard2.0, no Unity: message model, JSON writer, **pre-send validator** (every schema rule + CONTRACT.md §6 refinements), bitset/gzip/base64 encoder, PNG encoder. Unit-tested. |
+| `src/RlValheimLink/` | net472 BepInEx plugin. `Client/` captures (character, map, items+atlas), `Net/LinkChannel.cs` chunked routed RPC, `Server/` the dedicated-server half (receive → validate → dedupe → upload). |
+| `tests/RlValheimLink.Contract.Tests/` | xunit (net9): golden fixtures pass, every `fixtures/invalid/*` is rejected with the `{path, code}` from `EXPECTED.json`, encoders round-trip, `fixtures/` reproduce byte for byte. |
+| `fixtures/` | The mod's own serialised output for synthetic captures (no real ids, names or seeds). Regenerate: `RLVL_WRITE_FIXTURES=1 dotnet test tests/RlValheimLink.Contract.Tests`. |
+| `tools/mock-ingest/` | Node stand-in for the ROK-1833 ingest endpoint (ajv, bearer token, serverId, gzip, caps → 413, rate limit → 429, blobs by sha256, §6 bitmap inflate). Acceptance target until a Raid Ledger env exists. |
+| `tools/contract-check/` | ajv validation, drift check, pin refresh. |
+| `tools/validate-cli/` | Runs the C# validator over JSON files. |
+| `docs/design.md` | RPC shape, capture triggers, dedupe keys, upload state machine, size budget, config, **open questions**. Read it before touching the plugin. |
+| `docs/operator-checklist.md` | Numbered in-game checks with exact log lines; the operator runs them. |
+| `thunderstore/` | `manifest.json`, `icon.png`, Thunderstore README. `release.yml` builds the zip on a `v*` tag. |
+
+## Commands
+
+```bash
+dotnet test tests/RlValheimLink.Contract.Tests            # contract library tests
+dotnet build src/RlValheimLink/RlValheimLink.csproj      # plugin (NuGet game libs; or VALHEIM_INSTALL=… for your install)
+node tools/contract-check/validate.mjs fixtures          # ajv against schema.json
+tools/contract-check/drift-check.sh                      # pinned contract vs Raid Ledger main
+dotnet run --project tools/validate-cli -- --inflate fixtures
+cd tools/mock-ingest && npm test && npm start            # mock receiver
+```
+
+## Working rules
+
+- Small commits, conventional prefixes: `feat(client):`, `feat(server):`, `feat(contract-lib):`, `chore(ci):`, `docs:`. One PR per slice; CI green before merge.
+- Never commit secrets, game DLLs, real Steam ids, player or world names, seeds, or real captures. Fixture ids are `765611980000000xx` / invented names.
+- Log lines start with `RLVL:`; the token is masked by `Log` and must never reach a log, exception text, spool file or RPC. Pin labels are player free text: never log them.
+- Every message goes through `Validator.Validate` before it is serialised for the wire; anything with issues is logged and **not sent**.
+- Server-side trust: identity comes from the peer's socket, never from the client's claim (design §4).
+- The game API this was written against is `ValheimGameLibs 0.221.4`; members used are listed in `docs/design.md` §2. UNVERIFIED items there are confirmed by the operator checklist, not by assumption.
+- The server half is gated on the operator's answers to `docs/design.md` §9. Until then `Server/ServerHalf.cs` is a logging stub.

@@ -1,0 +1,17 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+node_modules/
+dist/
+build/
+*.zip
+# never commit game assemblies, tokens or real captures
+lib/
+*.dll
+!tools/**/*.dll
+.env
+BepInEx/
+spool/
+/tmp/
