@@ -1,0 +1,42 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  thunderstore-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '9.0.x' }
+      - name: Tag matches ModVersion and the manifest
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          props=$(sed -n 's#.*<ModVersion>\(.*\)</ModVersion>.*#\1#p' Directory.Build.props)
+          manifest=$(node -p "require('./thunderstore/manifest.json').version_number")
+          echo "tag=$tag props=$props manifest=$manifest"
+          [ "$tag" = "$props" ] && [ "$tag" = "$manifest" ]
+      - name: Build (Release)
+        run: dotnet build src/RlValheimLink/RlValheimLink.csproj -c Release -warnaserror
+      - name: Assemble Thunderstore layout
+        run: |
+          set -e
+          out=build/pkg
+          mkdir -p "$out/plugins/RlValheimLink"
+          cp src/RlValheimLink/bin/Release/net472/RlValheimLink.dll src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll "$out/plugins/RlValheimLink/"
+          cp thunderstore/manifest.json thunderstore/icon.png "$out/"
+          cp thunderstore/README.md "$out/README.md"
+          cp CHANGELOG.md "$out/CHANGELOG.md"
+          cp LICENSE "$out/LICENSE"
+          (cd "$out" && zip -r "../RaidLedger-RLValheimLink-${GITHUB_REF_NAME#v}.zip" .)
+          ls -la build
+      - name: GitHub release with the zip
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/RaidLedger-RLValheimLink-*.zip
+          generate_release_notes: true
