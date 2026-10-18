@@ -1,0 +1,14 @@
+{
+  "name": "rlvl-contract-check",
+  "private": true,
+  "type": "module",
+  "description": "Validate messages against the pinned contract/v1/schema.json with ajv, and check the pin for drift.",
+  "scripts": {
+    "validate": "node validate.mjs",
+    "drift": "bash drift-check.sh"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1"
+  }
+}
