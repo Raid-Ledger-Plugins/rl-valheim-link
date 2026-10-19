@@ -15,16 +15,25 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
 1. Start the dedicated server. Expect:
    `RLVL: loaded v0.1.0 (contract v1); waiting for ZNet to decide client/server role`
    `RLVL: ZNet up: server=True client=False dedicated=True`
-   `RLVL: server half active: serverId='<id>' baseUrl='<url>' token=set (uploads: NOT BUILT YET — pending design §9)`
+   `RLVL: server half active: serverId='<id>' baseUrl='<url>' token=set world=<uid> game=<version> spool=<dir> (pending=0 blobsPending=0 uploadedKeys=0)`
    If you see `token=MISSING` or the `must all be set` warning, fix the config and restart.
+   Within ~15 s: `RLVL: base map: rendering 2048² at 12 m/px, 4 rows per tick`, then
+   `RLVL: base map: sampled in <ms> ms; encoding PNG`, `RLVL: base map: ready, <bytes> bytes, sha256=<12 hex>… in <ms> ms`,
+   `RLVL: base map queued for upload (<bytes> bytes)` and, once the uploader runs,
+   `RLVL: PUT blob <12 hex>… → 201 stored in <ms> ms`. Paste back the four base-map lines and how long the
+   server tick stalled while rendering (watch the console; design §2 says this is UNVERIFIED).
 2. Start your client (modded profile) and join the test world. Client log:
    `RLVL: ZNet up: server=False client=True dedicated=False`
    `RLVL: client half active (sendCharacter=True sendMap=True iconSize=64)`
    then, once your character has spawned:
    `RLVL: queued hello: transfer #1 Hello <n> bytes in 1 chunk(s)` and `RLVL: sent hello: transfer #1 complete`.
    Server log: `RLVL: received transfer #1 Hello from peer <uid>: <n> bytes` and
-   `RLVL: server stub: Hello payload of <n> bytes from peer <uid> received and DROPPED`.
-   Paste back: the `ZNet up` line from both sides and the three hello lines.
+   `RLVL: peer <uid>: hello mod=0.1.0 game=<version> modSet=<12 hex>… steam=<17 digits> admin=<True|False>`.
+   If `steam=none`, the server could not read a SteamID64 from your connection (crossplay/PlayFab?) and
+   will reject your data — paste the line and stop here.
+   If you are in `adminlist.txt`: `RLVL: peer <uid>: asking for the items export (game <version>, mod set …)`
+   follows, and your client starts the export of section D on its own.
+   Paste back: the `ZNet up` line from both sides and the hello lines.
 
 ## B. Character capture (client)
 
@@ -47,10 +56,20 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
 
 ## C. Server receipt
 
-7. Server log for step 4: `RLVL: received transfer #2 Character from peer <uid>: <bytes> bytes` and the
-   `server stub: … DROPPED` line; same for `#3 Map`. Paste back both `received` lines and the peer uid.
-8. (After the server slice lands) the `received` lines are followed by validation, dedupe and upload
-   lines; this section will be extended then.
+7. Server log for step 4, in this order:
+   `RLVL: received transfer #2 Character from peer <uid>: <bytes> bytes`
+   `RLVL: peer <uid>: character character|<steamId>|<playerId> capturedAt=<ts> <bytes> bytes → Accepted`
+   `RLVL: POST character character|<steamId>|<playerId> → 202 accepted in <ms> ms`
+   and the same three for `Map` (`→ 202 accepted`; the map line ends with `refs=1` once the base map exists).
+   A repeat of `rlvl export now` within 30 s produces `… → DroppedOlder` or the client-side throttle
+   (no capture) — both are correct. Paste back the six lines.
+8. Problems to paste verbatim if they appear:
+   `RLVL: peer <uid>: character rejected: playerId claim … != the peer's character …` (identity cross-check),
+   `RLVL: peer <uid>: … rejected: contract: …` (a mod bug),
+   `RLVL: POST … → 400 schema_invalid [path:code]: dropped` (contract drift — run the drift check),
+   `RLVL: uploads HALTED: 401 …` (token rotated: paste the new one into the config, uploads resume within 10 min),
+   `RLVL: uploads HALTED: 403 …` (ServerId wrong), `RLVL: 429 rate limited …; backing off <n> s`.
+   `rlvl status` on the server console prints `RLVL server: uploader=<state> pending=… uploaded=… baseMap=<state>`.
 
 ## D. Items export (client, GPU)
 

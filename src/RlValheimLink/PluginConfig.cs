@@ -16,7 +16,8 @@ namespace RlValheimLink
         public static ConfigEntry<string> ItemsExportBy;
         // [BaseMap]
         public static ConfigEntry<bool> BaseMapEnabled;
-        public static ConfigEntry<int> BaseMapRowsPerTick;
+        public static ConfigEntry<int> BaseMapRowsPerTick, BaseMapTextureSize;
+        public static ConfigEntry<float> BaseMapPixelSizeMetres;
         // [Client]
         public static ConfigEntry<bool> OptOut, SendCharacter, SendMap;
         public static ConfigEntry<int> MinSecondsBetweenCharacter, MinSecondsBetweenMap;
@@ -42,7 +43,9 @@ namespace RlValheimLink
             ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "admins", new ConfigDescription("Server only. Which clients may produce the items export when asked: admins | anyone | nobody.", new AcceptableValueList<string>("admins", "anyone", "nobody")));
 
             BaseMapEnabled = cfg.Bind("BaseMap", "Enabled", true, "Server only. Render the world's base map PNG once per (world, game version).");
-            BaseMapRowsPerTick = cfg.Bind("BaseMap", "RowsPerTick", 8, new ConfigDescription("Server only. Rows rendered per Update tick (time-slicing).", new AcceptableValueRange<int>(1, 256)));
+            BaseMapRowsPerTick = cfg.Bind("BaseMap", "RowsPerTick", 4, new ConfigDescription("Server only. Rows rendered per Update tick (time-slicing; 2048 rows at 4/tick ≈ 10 s of ticks).", new AcceptableValueRange<int>(1, 256)));
+            BaseMapTextureSize = cfg.Bind("BaseMap", "TextureSize", 2048, new ConfigDescription("Server only. Edge of the rendered base map in pixels; must equal the clients' minimap textureSize (vanilla 2048) or the map is sent without a base map.", new AcceptableValueRange<int>(64, 4096)));
+            BaseMapPixelSizeMetres = cfg.Bind("BaseMap", "PixelSizeMetres", 12f, new ConfigDescription("Server only. World metres per base-map pixel; must equal the clients' minimap pixel size (vanilla 12).", new AcceptableValueRange<float>(0.5f, 256f)));
 
             OptOut = cfg.Bind("Client", "OptOut", false, "Client only. PER-PLAYER OPT-OUT: when true this game client sends nothing to the server (no character, map or items data).");
             SendCharacter = cfg.Bind("Client", "SendCharacter", true, "Client only. Send the character summary on save/logout/quit.");

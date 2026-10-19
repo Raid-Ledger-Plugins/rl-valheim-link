@@ -3,7 +3,8 @@
 A BepInEx 5 mod for Valheim (client + dedicated server) that exports a player's character
 summary, explored map and pins, and the item name/icon catalogue, and pushes them to a
 [Raid Ledger](https://github.com/sjdodge123/Raid-Ledger) instance. Story **ROK-1834**; design
-background ROK-1799; wire contract ROK-1829; ingest endpoint ROK-1833.
+background ROK-1799; wire contract ROK-1829; ingest endpoint ROK-1833 (merged 2026-10-18).
+Thunderstore package: `RaidLedger-ValheimLink`.
 
 ```
 player client ──(chunked routed RPC)──► dedicated server ──(HTTPS, per-server bearer token)──► Raid Ledger
@@ -22,7 +23,7 @@ changes it, validates every message against it, and CI fails when the copy drift
 | Mock ingest receiver (`tools/mock-ingest`) | done |
 | Client half: character / map / items captures, hello, opt-out, console | done (needs in-game verification: [`docs/operator-checklist.md`](docs/operator-checklist.md)) |
 | Transport: chunked routed RPC with caps and rate limits | done |
-| Server half: receive → enrich → validate → dedupe → spool → upload (+ base-map render) | **pending** operator answers to [`docs/design.md` §9](docs/design.md#9-open-questions-for-the-operator-defaults-in-bold) — currently a logging stub |
+| Server half: receive → enrich → validate → dedupe → spool → upload (+ base-map render) | done; `RlValheimLink.Core` is tested end to end against the mock, the game glue needs the in-game checklist; a Raid Ledger fleet env with a per-server token is the final acceptance target |
 | Thunderstore packaging + release workflow | done (untagged) |
 
 ## Read first
@@ -44,8 +45,8 @@ cd tools/contract-check && npm ci && node validate.mjs ../../fixtures && ./drift
 cd tools/mock-ingest && npm ci && npm test && npm start     # local ingest on :8787
 ```
 
-Output: `src/RlValheimLink/bin/Release/net472/RlValheimLink.dll` + `RlValheimLink.Contract.dll`
-→ copy both to `BepInEx/plugins/RlValheimLink/` on the client and the server.
+Output: `src/RlValheimLink/bin/Release/net472/RlValheimLink.dll` + `RlValheimLink.Contract.dll` +
+`RlValheimLink.Core.dll` → copy all three to `BepInEx/plugins/RlValheimLink/` on the client and the server.
 
 ## Config
 

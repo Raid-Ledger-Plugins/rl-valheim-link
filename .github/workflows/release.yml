@@ -28,7 +28,7 @@ jobs:
           set -e
           out=build/pkg
           mkdir -p "$out/plugins/RlValheimLink"
-          cp src/RlValheimLink/bin/Release/net472/RlValheimLink.dll src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll "$out/plugins/RlValheimLink/"
+          cp src/RlValheimLink/bin/Release/net472/RlValheimLink.dll src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll src/RlValheimLink/bin/Release/net472/RlValheimLink.Core.dll "$out/plugins/RlValheimLink/"
           cp thunderstore/manifest.json thunderstore/icon.png "$out/"
           cp thunderstore/README.md "$out/README.md"
           cp CHANGELOG.md "$out/CHANGELOG.md"

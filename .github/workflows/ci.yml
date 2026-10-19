@@ -81,4 +81,5 @@ jobs:
           path: |
             src/RlValheimLink/bin/Release/net472/RlValheimLink.dll
             src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll
+            src/RlValheimLink/bin/Release/net472/RlValheimLink.Core.dll
           if-no-files-found: error

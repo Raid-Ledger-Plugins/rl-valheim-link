@@ -15,6 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/RlValheimLink.Contract/RlValheimLink.Contract.csproj" />
+    <ProjectReference Include="../../src/RlValheimLink.Core/RlValheimLink.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">

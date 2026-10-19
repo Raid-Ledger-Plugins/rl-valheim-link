@@ -17,7 +17,8 @@ upstream main; the only fix is `tools/contract-check/refresh-pin.sh`.
 | Path | What |
 |---|---|
 | `src/RlValheimLink.Contract/` | netstandard2.0, no Unity: message model, JSON writer, **pre-send validator** (every schema rule + CONTRACT.md §6 refinements), bitset/gzip/base64 encoder, PNG encoder. Unit-tested. |
-| `src/RlValheimLink/` | net472 BepInEx plugin. `Client/` captures (character, map, items+atlas), `Net/LinkChannel.cs` chunked routed RPC, `Server/` the dedicated-server half (receive → validate → dedupe → upload). |
+| `src/RlValheimLink.Core/` | netstandard2.0, no Unity: the server half's logic — `Enricher` (serverId, socket identity, playerId check, clock clamp, base-map attach, then validate), `Spool` (disk queue, latest-wins dedupe, blobs by sha256), `Uploader` (state machine: budgets, backoff, halt on 401/403) and `RaidLedgerClient` (HTTP). Tested end to end against the mock. |
+| `src/RlValheimLink/` | net472 BepInEx plugin. `Client/` captures (character, map, items+atlas), `Net/LinkChannel.cs` chunked routed RPC, `Server/` the game glue of the server half (peer identity, hello/needItems, base-map render, ticking Core). |
 | `tests/RlValheimLink.Contract.Tests/` | xunit (net9): golden fixtures pass, every `fixtures/invalid/*` is rejected with the `{path, code}` from `EXPECTED.json`, encoders round-trip, `fixtures/` reproduce byte for byte. |
 | `fixtures/` | The mod's own serialised output for synthetic captures (no real ids, names or seeds). Regenerate: `RLVL_WRITE_FIXTURES=1 dotnet test tests/RlValheimLink.Contract.Tests`. |
 | `tools/mock-ingest/` | Node stand-in for the ROK-1833 ingest endpoint (ajv, bearer token, serverId, gzip, caps → 413, rate limit → 429, blobs by sha256, §6 bitmap inflate). Acceptance target until a Raid Ledger env exists. |
@@ -46,4 +47,4 @@ cd tools/mock-ingest && npm test && npm start            # mock receiver
 - Every message goes through `Validator.Validate` before it is serialised for the wire; anything with issues is logged and **not sent**.
 - Server-side trust: identity comes from the peer's socket, never from the client's claim (design §4).
 - The game API this was written against is `ValheimGameLibs 0.221.4`; members used are listed in `docs/design.md` §2. UNVERIFIED items there are confirmed by the operator checklist, not by assumption.
-- The server half is gated on the operator's answers to `docs/design.md` §9. Until then `Server/ServerHalf.cs` is a logging stub.
+- Server-half logic lives in `RlValheimLink.Core` so it is unit-tested and driven against the mock (`UploaderMockTests` spawns `node tools/mock-ingest/server.mjs`); `Server/` in the plugin only touches game objects. Keep it that way.
