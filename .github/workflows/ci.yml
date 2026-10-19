@@ -54,6 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the shipped-files diff below needs the merge base with the PR's base branch
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '9.0.x' }
       - uses: actions/setup-node@v4
@@ -66,7 +68,7 @@ jobs:
       - name: Version was bumped if shipped files changed (PRs only)
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}"
           shipped=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- src thunderstore.toml thunderstore/README.md thunderstore/icon.png CHANGELOG.md LICENSE)
           if [ -z "$shipped" ]; then echo "No shipped files changed; no version bump needed."; exit 0; fi
           echo "Shipped files changed:"; echo "$shipped"
