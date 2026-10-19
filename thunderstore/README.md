@@ -11,8 +11,9 @@ Nothing on your PC talks to the internet: only the dedicated server holds a Raid
 
 ## Install
 
-Part of the **GamerSaloon** modpack. Standalone: install with r2modman / Thunderstore Mod Manager;
-needs BepInExPack and JsonDotNET (pulled in automatically). The **server** must run it too.
+Part of the **GamerSaloon** modpack. Standalone: install `RaidLedger-ValheimLink` with r2modman /
+Thunderstore Mod Manager; needs BepInExPack and JsonDotNET (pulled in automatically). The **server**
+must run it too.
 
 ## Opt out
 

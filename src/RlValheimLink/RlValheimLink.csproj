@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>RlValheimLink</AssemblyName>
+    <RootNamespace>RlValheimLink</RootNamespace>
+    <Description>RL Valheim Link: BepInEx plugin (client + dedicated server) that pushes character, map and item data to Raid Ledger.</Description>
+    <Authors>Raid Ledger Plugins</Authors>
+    <!-- Game assemblies: VALHEIM_INSTALL=<game dir> uses your own install (publicized at build time);
+         otherwise the community ValheimGameLibs NuGet package (already publicized and stripped). -->
+    <ValheimInstall Condition="'$(ValheimInstall)' == ''">$(VALHEIM_INSTALL)</ValheimInstall>
+    <ValheimManaged Condition="'$(ValheimInstall)' != ''">$(ValheimInstall)/valheim_Data/Managed</ValheimManaged>
+    <ValheimManaged Condition="'$(ValheimInstall)' != '' and !Exists('$(ValheimManaged)')">$(ValheimInstall)/valheim_server_Data/Managed</ValheimManaged>
+    <UseLocalGameLibs Condition="'$(ValheimManaged)' != '' and Exists('$(ValheimManaged)/assembly_valheim.dll')">true</UseLocalGameLibs>
+    <GameLibsVersion>0.221.4</GameLibsVersion>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <PackageReference Include="UnityEngine.Modules" Version="2022.3.50" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <ProjectReference Include="../RlValheimLink.Contract/RlValheimLink.Contract.csproj" />
+  </ItemGroup>
+
+  <!-- Option A: NuGet game libs (CI and anyone without the game). -->
+  <ItemGroup Condition="'$(UseLocalGameLibs)' != 'true'">
+    <PackageReference Include="ValheimGameLibs" Version="$(GameLibsVersion)" />
+  </ItemGroup>
+
+  <!-- Option B: your own install, publicized on the fly (docs/reference-assemblies.md). -->
+  <ItemGroup Condition="'$(UseLocalGameLibs)' == 'true'">
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
+    <Reference Include="assembly_valheim" Publicize="true"><HintPath>$(ValheimManaged)/assembly_valheim.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="assembly_guiutils" Publicize="true"><HintPath>$(ValheimManaged)/assembly_guiutils.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="assembly_utils" Publicize="true"><HintPath>$(ValheimManaged)/assembly_utils.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="com.rlabrecque.steamworks.net"><HintPath>$(ValheimManaged)/com.rlabrecque.steamworks.net.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- ValheimGameLibs ships both assembly_steamworks.dll and com.rlabrecque.steamworks.net.dll, which define the same Steamworks types; keep the one the game loads. -->
+  <Target Name="DropDuplicateSteamworks" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferencePath Remove="@(ReferencePath)" Condition="'%(Filename)' == 'assembly_steamworks'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="ReportGameLibs" BeforeTargets="CoreCompile">
+    <Message Importance="high" Condition="'$(UseLocalGameLibs)' == 'true'" Text="RlValheimLink: game assemblies from local install at $(ValheimManaged)" />
+    <Message Importance="high" Condition="'$(UseLocalGameLibs)' != 'true'" Text="RlValheimLink: game assemblies from NuGet ValheimGameLibs $(GameLibsVersion)" />
+  </Target>
+</Project>

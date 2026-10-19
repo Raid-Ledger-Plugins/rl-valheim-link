@@ -45,3 +45,40 @@ jobs:
         run: cd tools/mock-ingest && npm ci --no-audit --no-fund && npm test
       - name: Record
         run: echo "fixture validation (ajv + CSharp validator + mock-ingest) ran" >> "$GITHUB_STEP_SUMMARY"
+
+  # 3. Compile the plugin when game assemblies can be provided (ValheimGameLibs on NuGet).
+  #    Restore failure = skipped (recorded), not a red build; a COMPILE error is red.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '9.0.x' }
+      - name: Plugin.Version matches Directory.Build.props ModVersion
+        run: |
+          props=$(sed -n 's#.*<ModVersion>\(.*\)</ModVersion>.*#\1#p' Directory.Build.props)
+          code=$(sed -n 's#.*public const string Version = "\(.*\)";.*#\1#p' src/RlValheimLink/Plugin.cs)
+          echo "props=$props code=$code"; [ "$props" = "$code" ]
+      - name: Restore (game assemblies from NuGet)
+        id: restore
+        continue-on-error: true
+        run: dotnet restore src/RlValheimLink/RlValheimLink.csproj
+      - name: Build plugin
+        if: steps.restore.outcome == 'success'
+        run: dotnet build src/RlValheimLink/RlValheimLink.csproj -c Release --no-restore -warnaserror
+      - name: Record
+        run: |
+          if [ "${{ steps.restore.outcome }}" = "success" ]; then
+            echo "plugin: COMPILED against ValheimGameLibs (NuGet) + BepInEx.Core 5.4.21" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "plugin: NOT compiled — game assemblies could not be restored (feed down?); fixture validation still ran" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload plugin dll
+        if: steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RlValheimLink-${{ github.sha }}
+          path: |
+            src/RlValheimLink/bin/Release/net472/RlValheimLink.dll
+            src/RlValheimLink/bin/Release/net472/RlValheimLink.Contract.dll
+          if-no-files-found: error
