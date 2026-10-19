@@ -307,8 +307,9 @@ client a few hundred KB of upload once per changed save.
 ## 10. Contract change requests
 
 **Proposed, not filed (2026-10-19):** two new additive kinds, `containers`
-(chest contents per world, captured by the server) and `recipes` (crafting
-recipes, build pieces and stations, exported by an admin client). Scouting
+(chest contents per world, scanned by the server every 10 minutes) and
+`recipes` (crafting recipes, build pieces, stations and processing steps,
+exported by an admin client). Scouting
 design and Linear-ready story drafts: [`design-chests.md`](design-chests.md)
 §4–§5. The mod emits neither until Raid Ledger ships them and the pin is
 refreshed.
