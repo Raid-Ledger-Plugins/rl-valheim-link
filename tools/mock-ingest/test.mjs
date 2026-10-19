@@ -53,7 +53,7 @@ test('invalid fixtures: 400 schema_invalid / bitmap_invalid, or deferred §6 ref
     if (expected[name].code === 'custom' && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue; // Zod-only refinements: the C# validator covers them
     assert.equal(r.status, 400, `${name}: ${r.status}`);
     const body = await r.json();
-    assert.ok(['schema_invalid', 'bitmap_invalid'].includes(body.error), `${name}: ${body.error}`);
+    assert.ok(['schema_invalid', 'bitmap_invalid'].includes(body.code), `${name}: ${body.code}`);
   }
 }));
 
@@ -62,14 +62,14 @@ test('token, serverId, kind route, caps, encodings, rate buckets', async () => w
   assert.equal((await post(base, raw, {}, 'nope')).status, 401);
   assert.equal((await post(base, raw, {}, 'other-token')).status, 403);
   assert.equal((await post(base, raw, {}, TOKEN, 'map')).status, 400);
-  assert.equal((await (await post(base, raw, {}, TOKEN, 'map')).json()).error, 'kind_mismatch');
-  assert.equal((await post(base, raw, {}, TOKEN, 'nope')).status, 404);
-  assert.equal((await (await post(base, bumped(raw, '2099-01-01T00:00:00Z'))).json()).error, 'captured_at_in_future');
+  assert.equal((await (await post(base, raw, {}, TOKEN, 'map')).json()).code, 'kind_mismatch');
+  assert.equal((await (await post(base, raw, {}, TOKEN, 'nope')).json()).code, 'unknown_kind');
+  assert.equal((await (await post(base, bumped(raw, '2099-01-01T00:00:00Z'))).json()).code, 'captured_at_in_future');
   assert.equal((await post(base, raw, { 'content-type': 'text/plain' })).status, 415);
   assert.equal((await post(base, raw, { 'content-encoding': 'br' })).status, 415);
-  assert.equal((await (await post(base, Buffer.from('not gzip'), { 'content-encoding': 'gzip' }, TOKEN, 'character')).json()).error, 'bad_gzip');
+  assert.equal((await (await post(base, Buffer.from('not gzip'), { 'content-encoding': 'gzip' }, TOKEN, 'character')).json()).code, 'bad_gzip');
   assert.equal((await post(base, Buffer.alloc(2_200_000, 0x78), {}, TOKEN, 'character')).status, 413); // over the character cap
-  assert.equal((await (await post(base, 'x'.repeat(1000), {}, TOKEN, 'character')).json()).error, 'bad_json');
+  assert.equal((await (await post(base, 'x'.repeat(1000), {}, TOKEN, 'character')).json()).code, 'bad_json');
   for (let i = 0; i < 20; i++) await post(base, bumped(raw, `2026-10-17T20:${20 + i}:00Z`));
   const limited = await post(base, raw);
   assert.equal(limited.status, 429); assert.ok(Number(limited.headers.get('retry-after')) >= 1);
@@ -82,13 +82,13 @@ test('blob upload: sha256, IHDR, identity only, cross-check with a referencing m
   const sha = createHash('sha256').update(png).digest('hex');
   assert.equal((await put(base, sha, png)).status, 201);
   assert.equal((await put(base, sha, png)).status, 200);
-  assert.equal((await (await put(base, '0'.repeat(64), png)).json()).error, 'sha256_mismatch');
-  assert.equal((await (await put(base, sha, Buffer.from('nope'))).json()).error, 'not_png');
+  assert.equal((await (await put(base, '0'.repeat(64), png)).json()).code, 'hash_mismatch');
+  assert.equal((await (await put(base, sha, Buffer.from('nope'))).json()).code, 'not_png');
   assert.equal((await put(base, sha, gzipSync(png), 'rlvl', { 'content-encoding': 'gzip' })).status, 415);
   assert.equal((await put(base, sha, png, 'rlvl', { 'content-type': 'image/jpeg' })).status, 415);
   // A message whose ref disagrees with the stored blob is 400 blob_ref_mismatch.
   const wrong = JSON.parse(items); wrong.capturedAt = '2026-10-18T13:00:00Z'; wrong.atlas.byteLength += 1;
-  assert.equal((await (await post(base, JSON.stringify(wrong), {}, 'rlvl')).json()).error, 'blob_ref_mismatch');
+  assert.equal((await (await post(base, JSON.stringify(wrong), {}, 'rlvl')).json()).code, 'blob_ref_mismatch');
   // 6 authenticated PUTs so far (every one counts, like the real guard); the bucket is 10.
   for (let i = 0; i < 4; i++) assert.equal((await put(base, sha, png)).status, 200);
   assert.equal((await put(base, sha, png)).status, 429);
@@ -101,6 +101,6 @@ test('per-server quotas → 413 quota_exceeded', async () => withMock(async (bas
   assert.equal((await post(base, raw)).status, 202);
   const other = JSON.parse(raw); other.character.playerId = '1000000000000002';
   const r = await post(base, JSON.stringify(other));
-  assert.equal(r.status, 413); assert.equal((await r.json()).error, 'quota_exceeded');
+  assert.equal(r.status, 413); assert.equal((await r.json()).code, 'quota_exceeded');
   assert.equal((await post(base, bumped(raw))).status, 202); // updating an existing key is always admitted
 }, { maxSnapshots: 1 }));

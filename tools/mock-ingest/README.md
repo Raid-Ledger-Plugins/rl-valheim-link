@@ -19,7 +19,7 @@ npm test                                                        # node --test
 | `RLVL_MOCK_RATE_MESSAGES` / `RLVL_MOCK_RATE_BLOBS` | 60 / 20 | per-server requests per minute before 429 (the real defaults) |
 | `RLVL_MOCK_DATA` | (memory) | directory to persist accepted messages and blobs |
 
-What it mirrors from the real endpoint: bearer token → 401 `invalid_token`; `serverId` ≠ token's
+What it mirrors from the real endpoint (error bodies are `{ code, message }`, plus `issues` for `schema_invalid`): bearer token → 401 `invalid_token`; `serverId` ≠ token's
 server → 403; body `kind` ≠ route → 400 `kind_mismatch`; `Content-Type` / encoding → 415
 `unsupported_media`; `Content-Encoding: gzip` on messages only, inflated under the kind's §7 cap;
 over the cap (declared or streamed) → 413 `payload_too_large`; `schema.json` via ajv → 400

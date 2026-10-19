@@ -7,7 +7,7 @@
 //   PUT  <BLOBS_PATH>/<sha256>       raw PNG, Content-Type: image/png, identity encoding only;
 //                                    sha256 + length checked, IHDR read before anything else
 //   GET  /health, GET /state         inspection for tests and the operator
-// Responses (error body `{ error: <code>, message }` like the real one):
+// Responses (error body `{ code, message }` exactly like the real one, verified on the acceptance env):
 //   202 { status: accepted|stale, missingBlobs } · 201 stored / 200 exists (blobs)
 //   400 bad_json | schema_invalid (issues as {path, code}) | kind_mismatch | captured_at_in_future |
 //       bitmap_invalid | blob_ref_mismatch · 401 invalid_token · 403 server_mismatch · 404 · 413 payload_too_large |
@@ -47,7 +47,7 @@ export function createMock(opts = {}) {
   if (dataDir) mkdirSync(join(dataDir, 'blobs'), { recursive: true });
 
   const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
-  const fail = (res, code, error, message, extra = {}) => json(res, code, { error, message, ...extra });
+  const fail = (res, status, code, message, extra = {}) => json(res, status, { code, message, ...extra });
   const readBody = (req, cap) => new Promise((resolveBody, reject) => {
     const chunks = []; let size = 0;
     let over = false;
@@ -70,7 +70,7 @@ export function createMock(opts = {}) {
     if (win.length >= rate[bucket]) {
       const retry = Math.max(1, Math.ceil((60_000 - (t - win[0])) / 1000));
       res.writeHead(429, { 'retry-after': String(retry), 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'rate_limited', message: 'Too many requests for this server' })); return true;
+      res.end(JSON.stringify({ code: 'rate_limited', message: 'Too many requests for this server' })); return true;
     }
     win.push(t); state.rate.set(key, win); return false;
   }
@@ -106,7 +106,7 @@ export function createMock(opts = {}) {
 
   async function postMessage(req, res, serverId, routeKind) {
     const cap = CAPS[routeKind];
-    if (!cap) return fail(res, 404, 'not_found', 'no such kind route');
+    if (!cap) return fail(res, 400, 'unknown_kind', 'no such kind route');
     const ct = (req.headers['content-type'] ?? '').split(';')[0].trim();
     if (ct !== 'application/json') return fail(res, 415, 'unsupported_media', 'Content-Type must be application/json');
     const enc = (req.headers['content-encoding'] ?? '').trim().toLowerCase();
@@ -114,7 +114,7 @@ export function createMock(opts = {}) {
     const declared = Number(req.headers['content-length'] ?? 0);
     if (declared > cap) return fail(res, 413, 'payload_too_large', `declared ${declared} > ${cap}`);
     let body;
-    try { body = await readBody(req, cap); } catch (e) { return fail(res, e.code === 413 ? 413 : 400, e.code === 413 ? 'payload_too_large' : 'bad_request', e.message); }
+    try { body = await readBody(req, cap); } catch (e) { return fail(res, e.code === 413 ? 413 : 400, e.code === 413 ? 'payload_too_large' : 'bad_json', e.message); }
     if (enc === 'gzip') {
       try { body = gunzipSync(body, { maxOutputLength: cap }); } catch (e) { return e.code === 'ERR_BUFFER_TOO_LARGE' ? fail(res, 413, 'payload_too_large', `inflated body over ${cap}`) : fail(res, 400, 'bad_gzip', 'body is not valid gzip'); }
     }
@@ -165,22 +165,23 @@ export function createMock(opts = {}) {
   }
 
   async function putBlob(req, res, serverId, sha) {
-    if (!/^[0-9a-f]{64}$/.test(sha)) return fail(res, 400, 'bad_sha256', 'sha256 must be 64 lowercase hex');
+    if (!/^[0-9a-f]{64}$/.test(sha)) return fail(res, 400, 'hash_mismatch', 'route sha256 must be 64 lowercase hex');
     const ct = (req.headers['content-type'] ?? '').split(';')[0].trim();
     if (ct !== 'image/png') return fail(res, 415, 'unsupported_media', 'Content-Type must be image/png');
     const enc = (req.headers['content-encoding'] ?? '').trim().toLowerCase();
     if (enc && enc !== 'identity') return fail(res, 415, 'unsupported_media', 'blobs are sent uncompressed (identity)');
     const declared = Number(req.headers['content-length'] ?? 0);
-    if (declared > CAPS.binary) return fail(res, 413, 'payload_too_large', `declared ${declared} > ${CAPS.binary}`);
+    if (declared > CAPS.binary) return fail(res, 413, 'png_too_large', `declared ${declared} > ${CAPS.binary}`);
     const mine = [...state.blobs.values()].filter((b) => b.serverId === serverId);
     if (!state.blobs.has(sha) && (mine.length + 1 > quota.blobs || mine.reduce((a, b) => a + b.byteLength, 0) + declared > quota.blobBytes))
       return fail(res, 413, 'quota_exceeded', 'Blob storage quota for this server is full');
     let body;
-    try { body = await readBody(req, CAPS.binary); } catch (e) { return fail(res, e.code === 413 ? 413 : 400, e.code === 413 ? 'payload_too_large' : 'bad_request', e.message); }
+    try { body = await readBody(req, CAPS.binary); } catch (e) { return fail(res, e.code === 413 ? 413 : 400, e.code === 413 ? 'png_too_large' : 'not_png', e.message); }
+    if (body.length < 8 || body.readUInt32BE(0) !== 0x89504e47 || body.readUInt32BE(4) !== 0x0d0a1a0a) return fail(res, 400, 'not_png', 'body is not a PNG');
     const size = pngSize(body);
-    if (!size) return fail(res, 400, 'not_png', 'body is not a PNG (signature/IHDR)');
+    if (!size) return fail(res, 400, 'bad_ihdr', 'PNG IHDR missing or malformed');
     const hash = createHash('sha256').update(body).digest('hex');
-    if (hash !== sha) return fail(res, 400, 'sha256_mismatch', 'body hash differs from the route sha256');
+    if (hash !== sha) return fail(res, 400, 'hash_mismatch', 'body hash differs from the route sha256');
     // A referencing message may have arrived first: check its declared size/length (either order is fine).
     for (const snap of state.snapshots.values()) {
       for (const ref of blobRefs(snap.message)) {
@@ -193,7 +194,7 @@ export function createMock(opts = {}) {
     state.blobs.set(sha, { byteLength: body.length, ...size, serverId });
     if (dataDir) writeFileSync(join(dataDir, 'blobs', sha + '.png'), body);
     state.log.push({ kind: 'blob', sha, bytes: body.length, result: existed ? 'exists' : 'stored' });
-    return json(res, existed ? 200 : 201, { status: existed ? 'exists' : 'stored', sha256: sha, ...size, byteLength: body.length });
+    return json(res, existed ? 200 : 201, { status: existed ? 'exists' : 'stored', sha256: sha }); // ValheimLinkBlobResultSchema is strict: exactly these two keys
   }
 
   const server = createServer(async (req, res) => {
@@ -205,7 +206,7 @@ export function createMock(opts = {}) {
     if (req.method === 'POST' && kind !== null) { if (rateLimited(serverId, 'messages', res)) return; return postMessage(req, res, serverId, kind); }
     const m = url.pathname.startsWith(blobsPath + '/') ? url.pathname.slice(blobsPath.length + 1) : null;
     if (req.method === 'PUT' && m !== null) { if (rateLimited(serverId, 'blobs', res)) return; return putBlob(req, res, serverId, m); }
-    fail(res, 404, 'not_found', 'no such route', { messagesPath: messagesPath + '/{character|map|items}', blobsPath: blobsPath + '/{sha256}' });
+    json(res, 404, { statusCode: 404, message: `Cannot ${req.method} ${url.pathname}` }); // Nest's default 404, not an ingest error
   });
   return { server, state, messagesPath, blobsPath };
 }
