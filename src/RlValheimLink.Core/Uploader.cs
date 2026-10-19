@@ -72,19 +72,22 @@ namespace RlValheimLink.Core
             if (nowUtc - _lastRequest < _s.MinInterval) return;
 
             Prune(_msgWindow, nowUtc); Prune(_blobWindow, nowUtc);
-            foreach (var m in _spool.Pending())
+            // Every spooled blob goes up on its own, oldest first: either order is accepted upstream, and a
+            // base map is rendered before any map message references it. Uploading blobs first also means a
+            // message never lands "missing" its atlas or base map.
+            if (_blobWindow.Count < _s.MaxBlobsPerMinute)
             {
-                // Blobs the message references go first (either order is accepted upstream, but this way a message never lands "missing" its atlas).
-                foreach (var sha in m.BlobRefs)
+                foreach (var sha in _spool.PendingBlobs())
                 {
-                    if (!_spool.HasBlob(sha) || _spool.IsBlobUploaded(sha)) continue;
-                    if (_blobWindow.Count >= _s.MaxBlobsPerMinute) break;
                     var blob = _spool.Blob(sha);
                     if (blob.ByteLength > _s.MaxBlobBytes) { _log.Warn($"blob {Short(sha)} is {blob.ByteLength} bytes > Upload.MaxBlobBytes {_s.MaxBlobBytes}; dropped"); _spool.DropBlob(sha); continue; }
                     Start(nowUtc, null, sha, _client.PutBlobAsync(sha, _spool.ReadBlob(sha)));
                     _blobWindow.Add(nowUtc);
                     return;
                 }
+            }
+            foreach (var m in _spool.Pending())
+            {
                 if (_msgWindow.Count >= _s.MaxMessagesPerMinute) return;
                 byte[] bytes;
                 try { bytes = _spool.Read(m); }

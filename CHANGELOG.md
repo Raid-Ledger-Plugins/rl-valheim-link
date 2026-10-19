@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 — 2026-10-19
+
+- Fix: a spooled blob with no message referencing it yet (the base map, rendered at world load) was never
+  uploaded; blobs now go up on their own, oldest first, before messages. Found on the first real run.
+- No operator URLs in the repository or the built DLL: the `BaseUrl` config description and the design
+  doc no longer carry an example instance URL (operator ruling). The pinned contract keeps Raid
+  Ledger's own `$id`, which is theirs to change.
+
 ## 0.1.1 — 2026-10-19
 
 - Build against the game build the operator runs: Valheim **1.0.20** on Unity **6000.0.75** via the

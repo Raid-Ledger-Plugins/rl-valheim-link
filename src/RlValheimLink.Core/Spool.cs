@@ -140,6 +140,17 @@ namespace RlValheimLink.Core
 
         public string BlobPath(string sha256) => Path.Combine(_blobDir, sha256 + ".png");
 
+        /// <summary>Blobs stored but not yet uploaded, oldest first (a base map arrives before any message references it).</summary>
+        public List<string> PendingBlobs()
+        {
+            var list = new List<KeyValuePair<string, SpoolBlob>>();
+            foreach (var kv in _index.Blobs) if (!kv.Value.Uploaded && File.Exists(BlobPath(kv.Key))) list.Add(kv);
+            list.Sort((a, b) => a.Value.StoredUtc.CompareTo(b.Value.StoredUtc));
+            var shas = new List<string>(list.Count);
+            foreach (var kv in list) shas.Add(kv.Key);
+            return shas;
+        }
+
         public bool HasBlob(string sha256) => _index.Blobs.TryGetValue(sha256, out var b) && (b.Uploaded || File.Exists(BlobPath(sha256)));
         public bool IsBlobUploaded(string sha256) => _index.Blobs.TryGetValue(sha256, out var b) && b.Uploaded;
         public SpoolBlob Blob(string sha256) => _index.Blobs.TryGetValue(sha256, out var b) ? b : null;

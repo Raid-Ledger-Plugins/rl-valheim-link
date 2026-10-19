@@ -42,7 +42,7 @@ cd tools/mock-ingest && npm test && npm start            # mock receiver
 ## Working rules
 
 - Small commits, conventional prefixes: `feat(client):`, `feat(server):`, `feat(contract-lib):`, `chore(ci):`, `docs:`. One PR per slice; CI green before merge.
-- Never commit secrets, game DLLs, real Steam ids, player or world names, seeds, or real captures. Fixture ids are `765611980000000xx` / invented names.
+- Never commit secrets, game DLLs, real Steam ids, player or world names, seeds, real captures, or the operator's instance/env URLs (no `gamernight` hostnames outside the pinned contract, which is Raid Ledger's). Fixture ids are `765611980000000xx` / invented names.
 - Log lines start with `RLVL:`; the token is masked by `Log` and must never reach a log, exception text, spool file or RPC. Pin labels are player free text: never log them.
 - Every message goes through `Validator.Validate` before it is serialised for the wire; anything with issues is logged and **not sent**.
 - Server-side trust: identity comes from the peer's socket, never from the client's claim (design §4).

@@ -81,6 +81,24 @@ public class UploaderMockTests : IDisposable
     }
 
     [Fact]
+    public async Task A_blob_with_no_referencing_message_is_uploaded_on_its_own()
+    {
+        // The base map is rendered at world load, long before any map message references it (found on the first real server run).
+        await StartMock(new() { ["RLVL_MOCK_TOKEN"] = "t", ["RLVL_MOCK_SERVER_ID"] = "12" });
+        var log = new TestLog();
+        var spool = new Spool(_dir);
+        var client = new RaidLedgerClient(new ClientSettings { BaseUrl = $"http://localhost:{_port}" }, () => "t");
+        var up = new Uploader(spool, client, new UploaderSettings { MinInterval = TimeSpan.Zero }, log);
+        var png = File.ReadAllBytes(Repo.Fixture("items-atlas.png"));
+        spool.PutBlob(Png.Sha256Hex(png), png, 256, 128, DateTime.UtcNow);
+        Assert.Equal(0, spool.PendingCount);
+        await Drive(up, () => spool.IsBlobUploaded(Png.Sha256Hex(png)));
+        Assert.True(spool.IsBlobUploaded(Png.Sha256Hex(png)), log.ToString());
+        Assert.Equal(1, up.Uploaded);
+        Assert.Empty(spool.PendingBlobs());
+    }
+
+    [Fact]
     public async Task Wrong_token_halts_and_a_corrected_token_resumes()
     {
         await StartMock(new() { ["RLVL_MOCK_TOKEN"] = "good", ["RLVL_MOCK_SERVER_ID"] = "12" });

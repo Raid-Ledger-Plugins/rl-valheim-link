@@ -243,7 +243,7 @@ client a few hundred KB of upload once per changed save.
 
 | Section.Key | Default | Side | Meaning |
 |---|---|---|---|
-| `RaidLedger.BaseUrl` | `` | server | `https://raid.gamernight.net` (no trailing slash) |
+| `RaidLedger.BaseUrl` | `` | server | the operator's Raid Ledger instance, scheme + host, no trailing slash |
 | `RaidLedger.ServerToken` | `` | server | per-server bearer token from RL admin; never logged |
 | `RaidLedger.ServerId` | `` | server | RL's id for this game server; goes into every message |
 | `RaidLedger.MessagesPath` / `BlobsPath` | `/api/plugins/valheim/link/messages/{kind}` / `/api/plugins/valheim/link/blobs/{sha256}` | server | the ROK-1833 routes (§6); overridable for a mock on another path |
