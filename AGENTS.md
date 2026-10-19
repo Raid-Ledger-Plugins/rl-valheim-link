@@ -26,7 +26,7 @@ upstream main; the only fix is `tools/contract-check/refresh-pin.sh`.
 | `tools/validate-cli/` | Runs the C# validator over JSON files. |
 | `docs/design.md` | RPC shape, capture triggers, dedupe keys, upload state machine, size budget, config, **open questions**. Read it before touching the plugin. |
 | `docs/operator-checklist.md` | Numbered in-game checks with exact log lines; the operator runs them. |
-| `thunderstore/` | `manifest.json`, `icon.png`, Thunderstore README. `release.yml` builds the zip on a `v*` tag. |
+| `thunderstore.toml`, `thunderstore/` | tcli package config (version source of truth, namespace = the Thunderstore team owning `TCLI_AUTH_TOKEN`), icon and Thunderstore README. `release.yml` publishes to Thunderstore + tags + GitHub release on a push to main whose version is new. `tools/thunderstore/check.mjs` holds the version checks, `stage.sh` stages the DLLs. |
 
 ## Commands
 
@@ -35,13 +35,15 @@ dotnet test tests/RlValheimLink.Contract.Tests            # contract library tes
 dotnet build src/RlValheimLink/RlValheimLink.csproj      # plugin (NuGet game libs; or VALHEIM_INSTALL=… for your install)
 node tools/contract-check/validate.mjs fixtures          # ajv against schema.json
 tools/contract-check/drift-check.sh                      # pinned contract vs Raid Ledger main
+node tools/thunderstore/check.mjs consistent             # toml = props = Plugin.Version; also: changelog | published | deps | bumped <base.toml>
+tools/thunderstore/stage.sh && tcli build                # the Thunderstore zip (dotnet tool install --global tcli --version 0.2.4)
 dotnet run --project tools/validate-cli -- --inflate fixtures
 cd tools/mock-ingest && npm test && npm start            # mock receiver
 ```
 
 ## Working rules
 
-- Small commits, conventional prefixes: `feat(client):`, `feat(server):`, `feat(contract-lib):`, `chore(ci):`, `docs:`. One PR per slice; CI green before merge.
+- Small commits, conventional prefixes: `feat(client):`, `feat(server):`, `feat(contract-lib):`, `chore(ci):`, `docs:`. One PR per slice; CI green before merge. A PR that changes shipped files (`src/`, `thunderstore.toml`, Thunderstore README/icon, CHANGELOG) must bump the version in all three places and add a CHANGELOG section; merging it publishes.
 - Never commit secrets, game DLLs, real Steam ids, player or world names, seeds, real captures, or the operator's instance/env URLs (no `gamernight` hostnames outside the pinned contract, which is Raid Ledger's). Fixture ids are `765611980000000xx` / invented names.
 - Log lines start with `RLVL:`; the token is masked by `Log` and must never reach a log, exception text, spool file or RPC. Pin labels are player free text: never log them.
 - Every message goes through `Validator.Validate` before it is serialised for the wire; anything with issues is logged and **not sent**.

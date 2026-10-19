@@ -2,6 +2,8 @@
 
 ## 0.1.2 — 2026-10-19
 
+- First version published to Thunderstore as `GamerSaloon-ValheimLink`, from `main` by `release.yml`.
+
 - Fix: a spooled blob with no message referencing it yet (the base map, rendered at world load) was never
   uploaded; blobs now go up on their own, oldest first, before messages. Found on the first real run.
 - No operator URLs in the repository or the built DLL: the `BaseUrl` config description and the design
@@ -34,6 +36,6 @@
   and game version). Tested end to end against the mock receiver.
 - Contract pin refreshed to Raid Ledger main after ROK-1833 (additive: optional `blob` on file icons);
   mock receiver matches the real routes, error codes, rate buckets and quotas.
-- Thunderstore package name decided: `RaidLedger-ValheimLink`.
+- Thunderstore package name decided: `GamerSaloon-ValheimLink`.
 - Tooling: mock ingest receiver, ajv + C# fixture validation, contract drift check, CI and release workflows,
   Thunderstore layout.

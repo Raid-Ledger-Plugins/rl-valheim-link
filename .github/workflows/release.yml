@@ -1,42 +1,79 @@
 name: release
 
+# Mirrors the GamerSaloon modpack: a push to main whose version is not on Thunderstore yet
+# publishes the package there, tags v<version> and attaches the same zip to a GitHub release.
+# Repo-only merges (no version bump) are a no-op. Needs the TCLI_AUTH_TOKEN secret of the
+# Thunderstore team named by thunderstore.toml's namespace.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  thunderstore-zip:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '9.0.x' }
-      - name: Tag matches ModVersion and the manifest
+
+      - name: Version is consistent and not yet on Thunderstore
+        id: check
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          props=$(sed -n 's#.*<ModVersion>\(.*\)</ModVersion>.*#\1#p' Directory.Build.props)
-          manifest=$(node -p "require('./thunderstore/manifest.json').version_number")
-          echo "tag=$tag props=$props manifest=$manifest"
-          [ "$tag" = "$props" ] && [ "$tag" = "$manifest" ]
-      - name: Build (Release)
+          node tools/thunderstore/check.mjs consistent
+          version=$(node tools/thunderstore/check.mjs version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if node tools/thunderstore/check.mjs published; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dependencies exist at their pinned versions
+        if: steps.check.outputs.publish == 'true'
+        run: node tools/thunderstore/check.mjs deps
+
+      - name: Build the plugin (Release)
+        if: steps.check.outputs.publish == 'true'
         run: dotnet build src/RlValheimLink/RlValheimLink.csproj -c Release -warnaserror
-      - name: Assemble Thunderstore layout
+
+      - name: Install Thunderstore CLI
+        if: steps.check.outputs.publish == 'true'
+        run: dotnet tool install --global tcli --version 0.2.4
+
+      - name: Stage DLLs and build the package
+        if: steps.check.outputs.publish == 'true'
         run: |
-          set -e
-          out=build/pkg
-          mkdir -p "$out/plugins/RlValheimLink"
-          cp src/RlValheimLink/bin/Release/net48/RlValheimLink.dll src/RlValheimLink/bin/Release/net48/RlValheimLink.Contract.dll src/RlValheimLink/bin/Release/net48/RlValheimLink.Core.dll "$out/plugins/RlValheimLink/"
-          cp thunderstore/manifest.json thunderstore/icon.png "$out/"
-          cp thunderstore/README.md "$out/README.md"
-          cp CHANGELOG.md "$out/CHANGELOG.md"
-          cp LICENSE "$out/LICENSE"
-          (cd "$out" && zip -r "../RaidLedger-ValheimLink-${GITHUB_REF_NAME#v}.zip" .)
-          ls -la build
-      - name: GitHub release with the zip
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/RaidLedger-ValheimLink-*.zip
-          generate_release_notes: true
+          tools/thunderstore/stage.sh
+          tcli build
+          ls -la build/*.zip
+
+      - name: Publish to Thunderstore
+        if: steps.check.outputs.publish == 'true'
+        env:
+          TCLI_AUTH_TOKEN: ${{ secrets.TCLI_AUTH_TOKEN }}
+        run: |
+          if [ -z "$TCLI_AUTH_TOKEN" ]; then echo "::error::TCLI_AUTH_TOKEN secret is not set"; exit 1; fi
+          tcli publish --file build/*.zip
+
+      - name: Tag and GitHub release with the same zip (skipped when the tag already exists)
+        if: steps.check.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v${{ steps.check.outputs.version }}"
+          if git ls-remote --tags --exit-code origin "refs/tags/$v" >/dev/null 2>&1; then
+            echo "tag $v already exists; leaving the existing GitHub release alone"
+          else
+            git tag "$v" && git push origin "$v"
+            gh release create "$v" build/*.zip --title "$v" --generate-notes
+          fi

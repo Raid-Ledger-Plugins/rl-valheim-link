@@ -1,7 +1,7 @@
 # RL Valheim Link — design (ROK-1834)
 
 Status: **reviewed by the operator 2026-10-18** — every §9 default accepted,
-Q9 decided (`RaidLedger-ValheimLink`). ROK-1833 (the ingest endpoint) merged
+Q9 decided (`GamerSaloon-ValheimLink`). ROK-1833 (the ingest endpoint) merged
 the same day, which answered Q8 with real routes and limits (§6) and added one
 additive field to the contract (§10). **All three slices are built**: the
 server half lives in `src/RlValheimLink.Core` (enrichment, spool, uploader,
@@ -264,7 +264,7 @@ client a few hundred KB of upload once per changed save.
 ## 9. Open questions for the operator (defaults in bold)
 
 **Operator rulings 2026-10-18: all defaults accepted; Q8 answered by ROK-1833
-(§6); Q9 decided: Thunderstore `RaidLedger-ValheimLink` (namespace
+(§6); Q9 decided: Thunderstore `GamerSaloon-ValheimLink` (namespace
 `RaidLedger`, package `ValheimLink`), in-game name "RL Valheim Link", GUID
 `RaidLedger.ValheimLink`.** The list is kept for the record.
 
@@ -296,8 +296,8 @@ client a few hundred KB of upload once per changed save.
 8. **Routes:** ANSWERED by ROK-1833 (§6): `POST
    {BaseUrl}/api/plugins/valheim/link/messages/{kind}` and `PUT
    {BaseUrl}/api/plugins/valheim/link/blobs/{sha256}`.
-9. **Thunderstore:** DECIDED `RaidLedger-ValheimLink` (namespace `RaidLedger`,
-   package `ValheimLink`; dependency string `RaidLedger-ValheimLink-<version>`),
+9. **Thunderstore:** DECIDED `GamerSaloon-ValheimLink` (namespace `RaidLedger`,
+   package `ValheimLink`; dependency string `GamerSaloon-ValheimLink-<version>`),
    listed in the GamerSaloon pack as "Recommended"; no XPortal-style version
    enforcement — a client without the mod simply sends nothing.
 10. **Items export cadence on mod-set change:** the server asks for a new

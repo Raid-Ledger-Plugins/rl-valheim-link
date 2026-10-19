@@ -1,0 +1,43 @@
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+# namespace MUST equal the Thunderstore team that owns the TCLI_AUTH_TOKEN secret.
+namespace = "GamerSaloon"
+name = "ValheimLink"
+# Single source of truth for the version, checked against Directory.Build.props ModVersion and
+# Plugin.Version by CI (tools/thunderstore/check.mjs consistent). Thunderstore refuses to re-upload
+# an existing version, so every shipped change bumps this.
+versionNumber = "0.1.2"
+description = "Links this Valheim server to the group's Raid Ledger: pushes your character, explored map and the item catalogue. Server + client; per-player opt-out in the config."
+websiteUrl = "https://github.com/Raid-Ledger-Plugins/rl-valheim-link"
+containsNsfwContent = false
+
+[package.dependencies]
+denikson-BepInExPack_Valheim = "5.4.2351"
+ValheimModding-JsonDotNET = "13.0.4"
+
+[build]
+icon = "./thunderstore/icon.png"
+readme = "./thunderstore/README.md"
+outdir = "./build"
+
+# The three DLLs, staged by `tools/thunderstore/stage.sh` from the Release build.
+[[build.copy]]
+source = "./build/stage/plugins"
+target = "plugins"
+
+[[build.copy]]
+source = "./CHANGELOG.md"
+target = "CHANGELOG.md"
+
+[[build.copy]]
+source = "./LICENSE"
+target = "LICENSE"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["valheim"]
+
+[publish.categories]
+valheim = ["mods", "server-side", "client-side"]
