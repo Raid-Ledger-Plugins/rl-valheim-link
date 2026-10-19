@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 — 2026-10-19
+
+- Fix: captures made on logout or quit were lost — the game saves the profile and closes the connection in
+  the same frame, so chunks queued for later frames never left the client. The client now flushes every
+  queued transfer synchronously (and flushes the socket) when the save is a logout/quit save.
+- Fix: the admin check for the items export accepts both `Steam_<id>` (Valheim 1.0 list format) and bare
+  SteamID64 entries in `adminlist.txt`.
+
 ## 0.1.3 — 2026-10-19
 
 - Fix: the client never sent anything on Valheim 1.0.20 — the runtime enforces member visibility, and the

@@ -88,7 +88,23 @@ namespace RlValheimLink.Net
             ZRoutedRpc.instance?.InvokeRoutedRPC(targetPeer, RpcControl, pkg);
         }
 
-        public static void Tick()
+        public static void Tick() => Pump(ChunksPerTick, false);
+
+        /// <summary>
+        /// Send every queued chunk right now, ignoring the per-frame budget and the socket back-pressure,
+        /// then flush the socket. Used on logout/quit: the game saves the profile and tears the connection
+        /// down in the same frame, so anything left for a later Update is lost with the socket.
+        /// </summary>
+        public static void FlushAll()
+        {
+            int before = QueuedTransfers;
+            if (before == 0) return;
+            Pump(int.MaxValue, true);
+            try { ZNet.instance?.GetServerPeer()?.m_socket?.Flush(); } catch (Exception e) { Log.Debug("socket flush: " + e.Message); }
+            Log.Info($"flushed {before} transfer(s) synchronously (logout/quit)");
+        }
+
+        private static void Pump(int maxChunks, bool ignoreBackPressure)
         {
             if (!_registered) return;
             PruneIncoming();
@@ -99,7 +115,7 @@ namespace RlValheimLink.Net
             long target = GameAccess.ServerRoutedId();
             if (target == 0L) return; // not connected yet
 
-            for (int n = 0; n < ChunksPerTick; n++)
+            for (int n = 0; n < maxChunks; n++)
             {
                 if (_current == null)
                 {
@@ -108,7 +124,7 @@ namespace RlValheimLink.Net
                 }
                 // Back off while the socket to the server is busy (gameplay traffic first).
                 var serverPeer = znet.GetServerPeer();
-                if (serverPeer != null && serverPeer.m_socket != null && serverPeer.m_socket.GetSendQueueSize() > MaxSendQueueBytes) return;
+                if (!ignoreBackPressure && serverPeer != null && serverPeer.m_socket != null && serverPeer.m_socket.GetSendQueueSize() > MaxSendQueueBytes) return;
 
                 int offset = _current.NextChunk * ChunkSize;
                 int len = Math.Min(ChunkSize, _current.Payload.Length - offset);
