@@ -24,7 +24,9 @@ public class UploaderMockTests : IDisposable
     private async Task StartMock(Dictionary<string, string> env)
     {
         _port = 18000 + Random.Shared.Next(1000);
-        var psi = new ProcessStartInfo("node", "server.mjs") { WorkingDirectory = Path.Combine(Repo.Root, "tools", "mock-ingest"), RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var dir = Path.Combine(Repo.Root, "tools", "mock-ingest");
+        Assert.True(Directory.Exists(Path.Combine(dir, "node_modules")), "tools/mock-ingest/node_modules missing: run `npm ci` there first (CI does this before dotnet test)");
+        var psi = new ProcessStartInfo("node", "server.mjs") { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         psi.Environment["PORT"] = _port.ToString();
         foreach (var kv in env) psi.Environment[kv.Key] = kv.Value;
         _node = Process.Start(psi)!;

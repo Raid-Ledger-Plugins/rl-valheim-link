@@ -34,7 +34,9 @@ jobs:
           node validate.mjs ../../contract/v1/fixtures
           node validate.mjs ../../fixtures
           node validate.mjs --expect-invalid ../../contract/v1/fixtures/invalid
-      - name: CSharp pre-send validator — tests (golden pass, invalid rejected per EXPECTED.json, fixtures reproduce)
+      - name: Install mock-ingest (the uploader tests spawn it with node)
+        run: cd tools/mock-ingest && npm ci --no-audit --no-fund
+      - name: CSharp pre-send validator — tests (golden pass, invalid rejected per EXPECTED.json, fixtures reproduce, uploader vs mock)
         run: dotnet test tests/RlValheimLink.Contract.Tests -nologo
       - name: CSharp pre-send validator — CLI over fixtures (with bitmap inflate) and the invalid set
         run: |
@@ -42,7 +44,7 @@ jobs:
           dotnet run --project tools/validate-cli -- --inflate contract/v1/fixtures
           dotnet run --project tools/validate-cli -- --expect-invalid contract/v1/fixtures/invalid
       - name: mock-ingest accepts the fixtures and enforces token / serverId / caps / 429
-        run: cd tools/mock-ingest && npm ci --no-audit --no-fund && npm test
+        run: cd tools/mock-ingest && npm test
       - name: Record
         run: echo "fixture validation (ajv + CSharp validator + mock-ingest) ran" >> "$GITHUB_STEP_SUMMARY"
 
