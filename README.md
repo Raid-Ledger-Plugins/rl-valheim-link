@@ -62,9 +62,13 @@ BaseUrl`, `ServerToken`, `ServerId`; upload cadence under `[Upload]`. Client: `[
 - CI (`.github/workflows/ci.yml`): `contract-drift` (pin vs upstream main), `fixtures` (ajv +
   C# validator + mock-ingest; **always runs**), `build` (compiles when the game assemblies
   restore; records in the job summary whether it did).
-- Release (`release.yml`): a `v*` tag builds the Thunderstore zip `RaidLedger-ValheimLink-<version>.zip`
-  and attaches it to a GitHub release. Thunderstore package: namespace `RaidLedger`, name `ValheimLink`
-  (`thunderstore/` holds the manifest, icon and the Thunderstore README).
+- Release (`release.yml`): like the GamerSaloon modpack, **a push to main whose `thunderstore.toml`
+  version is not on Thunderstore yet** builds the package with `tcli`, publishes it as
+  `RaidLedger-ValheimLink`, tags `v<version>` and attaches the same zip to a GitHub release. Merges
+  without a version bump are a no-op. Needs the repository secret `TCLI_AUTH_TOKEN` (a Thunderstore
+  service-account token of the team named by the toml's `namespace`). `thunderstore.toml` is the
+  version's source of truth; CI checks it equals `Directory.Build.props` and `Plugin.Version`, that
+  `CHANGELOG.md` has the section, and that a PR touching shipped files bumps it.
 
 ## Third-party sources
 

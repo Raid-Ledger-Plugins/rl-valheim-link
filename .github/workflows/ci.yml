@@ -56,11 +56,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '9.0.x' }
-      - name: Plugin.Version matches Directory.Build.props ModVersion
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Version consistent (thunderstore.toml = Directory.Build.props = Plugin.Version) and changelog has it
         run: |
-          props=$(sed -n 's#.*<ModVersion>\(.*\)</ModVersion>.*#\1#p' Directory.Build.props)
-          code=$(sed -n 's#.*public const string Version = "\(.*\)";.*#\1#p' src/RlValheimLink/Plugin.cs)
-          echo "props=$props code=$code"; [ "$props" = "$code" ]
+          node tools/thunderstore/check.mjs consistent
+          node tools/thunderstore/check.mjs changelog
+      # Only PRs that change what ships need a new version (mirrors the modpack's validate.yml).
+      - name: Version was bumped if shipped files changed (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          shipped=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- src thunderstore.toml thunderstore/README.md thunderstore/icon.png CHANGELOG.md LICENSE)
+          if [ -z "$shipped" ]; then echo "No shipped files changed; no version bump needed."; exit 0; fi
+          echo "Shipped files changed:"; echo "$shipped"
+          git show "origin/${{ github.base_ref }}:thunderstore.toml" > /tmp/base.toml
+          node tools/thunderstore/check.mjs bumped /tmp/base.toml
+          if node tools/thunderstore/check.mjs published; then echo "::error::this version is already on Thunderstore"; exit 1; fi
       - name: Restore (game assemblies from NuGet)
         id: restore
         continue-on-error: true
@@ -75,13 +87,16 @@ jobs:
           else
             echo "plugin: NOT compiled — game assemblies could not be restored (feed down?); fixture validation still ran" >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Upload plugin dll
+      - name: Build the Thunderstore package (same layout release.yml publishes)
+        if: steps.restore.outcome == 'success'
+        run: |
+          dotnet tool install --global tcli --version 0.2.4
+          tools/thunderstore/stage.sh
+          tcli build
+      - name: Upload the package zip
         if: steps.restore.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: RlValheimLink-${{ github.sha }}
-          path: |
-            src/RlValheimLink/bin/Release/net48/RlValheimLink.dll
-            src/RlValheimLink/bin/Release/net48/RlValheimLink.Contract.dll
-            src/RlValheimLink/bin/Release/net48/RlValheimLink.Core.dll
+          name: RaidLedger-ValheimLink-${{ github.sha }}
+          path: build/*.zip
           if-no-files-found: error
