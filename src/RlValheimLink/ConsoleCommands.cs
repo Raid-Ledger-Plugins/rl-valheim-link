@@ -29,6 +29,7 @@ namespace RlValheimLink
             {
                 case "status":
                     args.Context.AddString($"RLVL v{Plugin.Version}: server={Roles.IsServer} client={Roles.IsClient} optOut={PluginConfig.OptOut.Value} queued={LinkChannel.QueuedTransfers} itemsExport={(ItemsCapture.IsRunning ? "running" : "idle")}");
+                    if (Roles.IsServer) args.Context.AddString("RLVL server: " + Server.ServerHalf.Status());
                     break;
                 case "export" when sub2 == "now":
                     if (!Roles.IsClient) { args.Context.AddString("RLVL: not a client"); break; }

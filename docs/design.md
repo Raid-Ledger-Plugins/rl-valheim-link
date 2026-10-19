@@ -1,10 +1,12 @@
 # RL Valheim Link — design (ROK-1834)
 
-Status: **reviewed by the operator 2026-10-18** — every §9 default accepted
-except the Thunderstore name (Q9), still being workshopped. ROK-1833 (the
-ingest endpoint) merged the same day, which answered Q8 with real routes and
-limits (§6) and added one additive field to the contract (§10). The server
-half is the next slice.
+Status: **reviewed by the operator 2026-10-18** — every §9 default accepted,
+Q9 decided (`RaidLedger-ValheimLink`). ROK-1833 (the ingest endpoint) merged
+the same day, which answered Q8 with real routes and limits (§6) and added one
+additive field to the contract (§10). **All three slices are built**: the
+server half lives in `src/RlValheimLink.Core` (enrichment, spool, uploader,
+HTTP client — tested end to end against the mock) plus the game glue in
+`src/RlValheimLink/Server` (peer identity, hello/needItems, base-map render).
 
 Reader's contract: `contract/v1/CONTRACT.md` is the wire format and wins over
 anything here. This document says how the mod reads the game and moves bytes
@@ -145,6 +147,13 @@ Raid Ledger server id and can never spoof identity:
 Then the whole message runs through the **same validator** the client used,
 and only a clean message is serialised (`Formatting.None`, UTF-8, no BOM) —
 those bytes are what gets POSTed, and what the CI fixtures were produced by.
+
+Implementation: `Core/Enricher.cs` (pure, unit-tested) fed by
+`Server/PeerIdentity.cs`, which refreshes every connected peer's socket host
+name, admin flag and character-ZDO `playerId` every 5 s and keeps them for 10
+minutes, so a message that lands just after a logout is still attributed. A
+peer that was never seen connected is dropped. A non-dedicated host's own
+loop-back messages use the local Steam id.
 
 ## 5. Dedupe
 

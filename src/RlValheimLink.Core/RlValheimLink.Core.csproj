@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>RlValheimLink.Core</AssemblyName>
+    <RootNamespace>RlValheimLink.Core</RootNamespace>
+    <Description>RL Valheim Link server-half logic with no Unity or game references: message enrichment, the disk spool with latest-wins dedupe, the upload state machine and the Raid Ledger HTTP client. Unit-tested on plain .NET and driven end to end against tools/mock-ingest.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <ProjectReference Include="../RlValheimLink.Contract/RlValheimLink.Contract.csproj" />
+  </ItemGroup>
+</Project>
