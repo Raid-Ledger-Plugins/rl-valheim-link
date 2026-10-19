@@ -3,7 +3,7 @@ schemaVersion = "0.0.1"
 
 [package]
 # namespace MUST equal the Thunderstore team that owns the TCLI_AUTH_TOKEN secret.
-namespace = "RaidLedger"
+namespace = "GamerSaloon"
 name = "ValheimLink"
 # Single source of truth for the version, checked against Directory.Build.props ModVersion and
 # Plugin.Version by CI (tools/thunderstore/check.mjs consistent). Thunderstore refuses to re-upload

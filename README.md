@@ -4,7 +4,7 @@ A BepInEx 5 mod for Valheim (client + dedicated server) that exports a player's 
 summary, explored map and pins, and the item name/icon catalogue, and pushes them to a
 [Raid Ledger](https://github.com/sjdodge123/Raid-Ledger) instance. Story **ROK-1834**; design
 background ROK-1799; wire contract ROK-1829; ingest endpoint ROK-1833 (merged 2026-10-18).
-Thunderstore package: `RaidLedger-ValheimLink`.
+Thunderstore package: `GamerSaloon-ValheimLink` (published by the operator's GamerSaloon team).
 
 ```
 player client ──(chunked routed RPC)──► dedicated server ──(HTTPS, per-server bearer token)──► Raid Ledger
@@ -64,7 +64,7 @@ BaseUrl`, `ServerToken`, `ServerId`; upload cadence under `[Upload]`. Client: `[
   restore; records in the job summary whether it did).
 - Release (`release.yml`): like the GamerSaloon modpack, **a push to main whose `thunderstore.toml`
   version is not on Thunderstore yet** builds the package with `tcli`, publishes it as
-  `RaidLedger-ValheimLink`, tags `v<version>` and attaches the same zip to a GitHub release. Merges
+  `GamerSaloon-ValheimLink`, tags `v<version>` and attaches the same zip to a GitHub release. Merges
   without a version bump are a no-op. Needs the repository secret `TCLI_AUTH_TOKEN` (a Thunderstore
   service-account token of the team named by the toml's `namespace`). `thunderstore.toml` is the
   version's source of truth; CI checks it equals `Directory.Build.props` and `Plugin.Version`, that

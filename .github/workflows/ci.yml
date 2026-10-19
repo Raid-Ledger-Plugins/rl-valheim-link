@@ -102,6 +102,6 @@ jobs:
         if: steps.restore.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: RaidLedger-ValheimLink-${{ github.sha }}
+          name: GamerSaloon-ValheimLink-${{ github.sha }}
           path: build/*.zip
           if-no-files-found: error

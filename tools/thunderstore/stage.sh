@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stage the Release DLLs where thunderstore.toml's [[build.copy]] expects them, then `tcli build`
-# packs build/RaidLedger-ValheimLink-<version>.zip (manifest.json generated from the toml).
+# packs build/GamerSaloon-ValheimLink-<version>.zip (manifest.json generated from the toml).
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 BIN="$REPO/src/RlValheimLink/bin/Release/net48"
