@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- The mod's own version: SemVer 2.0.0, copied into modVersion and the Thunderstore manifest by release.yml. -->
-    <ModVersion>0.1.4</ModVersion>
+    <ModVersion>0.1.5</ModVersion>
     <Version>$(ModVersion)</Version>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>

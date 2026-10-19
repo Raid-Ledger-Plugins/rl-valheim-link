@@ -44,6 +44,8 @@ namespace RlValheimLink.Core
             public Dictionary<string, SpoolBlob> Blobs = new Dictionary<string, SpoolBlob>();
             /// <summary>"gameVersion|modSetHash" → capturedAt of the accepted items export.</summary>
             public Dictionary<string, string> ItemsExports = new Dictionary<string, string>();
+            /// <summary>Fingerprint of the upload target (instance URL, server id, token) the markers above belong to.</summary>
+            public string Target;
         }
 
         private static readonly Regex Unsafe = new Regex("[^A-Za-z0-9_.-]");
@@ -191,6 +193,34 @@ namespace RlValheimLink.Core
         {
             _index.ItemsExports[gameVersion + "|" + modSetHash] = capturedAt;
             Save();
+        }
+
+        /// <summary>
+        /// When the Raid Ledger target changes (instance rebuilt, server id or token changed) nothing
+        /// uploaded so far exists there any more: forget the uploaded markers so blobs and the items
+        /// export are re-sent, and drop blob entries whose files were deleted after upload so a
+        /// re-render / re-export re-queues them. Pending messages and the dedupe watermarks stay
+        /// (the next capture is newer anyway). Returns true when a reset happened.
+        /// </summary>
+        public bool ResetIfTargetChanged(string fingerprint)
+        {
+            if (_index.Target == fingerprint) return false;
+            bool first = _index.Target == null;
+            _index.Target = fingerprint;
+            if (!first)
+            {
+                _index.LastUploaded.Clear();
+                _index.ItemsExports.Clear();
+                var gone = new List<string>();
+                foreach (var kv in _index.Blobs)
+                {
+                    if (File.Exists(BlobPath(kv.Key))) kv.Value.Uploaded = false;
+                    else gone.Add(kv.Key);
+                }
+                foreach (var k in gone) _index.Blobs.Remove(k);
+            }
+            Save();
+            return !first;
         }
 
         public string LastUploaded(string key) => _index.LastUploaded.TryGetValue(key, out var v) ? v : null;

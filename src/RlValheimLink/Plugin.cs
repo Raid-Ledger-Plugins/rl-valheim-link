@@ -13,7 +13,7 @@ namespace RlValheimLink
         public const string Guid = "RaidLedger.ValheimLink";
         public const string Name = "RL Valheim Link";
         /// <summary>SemVer; must equal ModVersion in Directory.Build.props (CI checks). Goes into every message as modVersion.</summary>
-        public const string Version = "0.1.4";
+        public const string Version = "0.1.5";
 
         public static Plugin Instance { get; private set; }
         private Harmony _harmony;

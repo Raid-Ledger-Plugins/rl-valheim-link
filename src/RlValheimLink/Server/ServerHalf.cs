@@ -66,6 +66,11 @@ namespace RlValheimLink.Server
                     MaxBlobsPerMinute = PluginConfig.UploadMaxBlobsPerMinute.Value,
                     MaxBlobBytes = PluginConfig.UploadMaxBlobBytes.Value,
                 }, new LogAdapter());
+                // Instance URL + server id + token (hashed; never logged) identify the upload target.
+                string fingerprint = Contract.Png.Sha256Hex(MessageJson.Utf8NoBom.GetBytes(
+                    PluginConfig.BaseUrl.Value.TrimEnd('/') + "|" + PluginConfig.ServerId.Value + "|" + Contract.Png.Sha256Hex(MessageJson.Utf8NoBom.GetBytes(PluginConfig.ServerToken.Value ?? "")))).Substring(0, 16);
+                if (_spool.ResetIfTargetChanged(fingerprint))
+                    Log.Info("upload target changed (instance, server id or token): forgot what was uploaded before — the base map and the items export will be sent again");
                 _baseMap = PluginConfig.BaseMapEnabled.Value
                     ? new BaseMapRenderer(Path.Combine(SpoolDirectory, "basemap"), PluginConfig.BaseMapTextureSize.Value, PluginConfig.BaseMapPixelSizeMetres.Value, PluginConfig.BaseMapRowsPerTick.Value)
                     : null;

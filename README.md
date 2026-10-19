@@ -48,11 +48,14 @@ cd tools/mock-ingest && npm ci && npm test && npm start     # local ingest on :8
 Output: `src/RlValheimLink/bin/Release/net48/RlValheimLink.dll` + `RlValheimLink.Contract.dll` +
 `RlValheimLink.Core.dll` → copy all three to `BepInEx/plugins/RlValheimLink/` on the client and the server.
 
-## Config
+## Config and operations
 
 `BepInEx/config/RaidLedger.ValheimLink.cfg` (created on first run). Server: `[RaidLedger]
-BaseUrl`, `ServerToken`, `ServerId`; upload cadence under `[Upload]`. Client: `[Client] OptOut`
-(per-player opt-out), `SendCharacter`, `SendMap`. Full table in `docs/design.md` §8.
+BaseUrl`, `ServerToken`, `ServerId`; upload cadence under `[Upload]`; `[Server] ItemsExportBy`
+(`admins` by default: the item catalogue is exported by a client whose SteamID64 is in the server's
+`adminlist.txt`). Client: `[Client] OptOut` (per-player opt-out), `SendCharacter`, `SendMap`. Full
+table in `docs/design.md` §8; the operator runbook (token rotation, rebuilt instance, item catalogue,
+error codes) is [`docs/operations.md`](docs/operations.md).
 
 ## Fixtures and CI
 

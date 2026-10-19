@@ -26,6 +26,7 @@ upstream main; the only fix is `tools/contract-check/refresh-pin.sh`.
 | `tools/validate-cli/` | Runs the C# validator over JSON files. |
 | `docs/design.md` | RPC shape, capture triggers, dedupe keys, upload state machine, size budget, config, **open questions**. Read it before touching the plugin. |
 | `docs/operator-checklist.md` | Numbered in-game checks with exact log lines; the operator runs them. |
+| `docs/operations.md` | Operator runbook: token rotation, rebuilt instance (auto-reset of upload markers), items export by admins, error codes. |
 | `thunderstore.toml`, `thunderstore/` | tcli package config (version source of truth, namespace = the Thunderstore team owning `TCLI_AUTH_TOKEN`), icon and Thunderstore README. `release.yml` publishes to Thunderstore + tags + GitHub release on a push to main whose version is new. `tools/thunderstore/check.mjs` holds the version checks, `stage.sh` stages the DLLs. |
 
 ## Commands
