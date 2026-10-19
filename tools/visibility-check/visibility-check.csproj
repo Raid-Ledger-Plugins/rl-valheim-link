@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12.0</LangVersion>
+    <AssemblyName>rlvl-visibility-check</AssemblyName>
+    <RootNamespace>RlValheimLink.Tools</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+    <!-- An UNPUBLICIZED copy of the game assemblies (real visibility). Version lags the game; members it
+         does not know are reported, not failed. -->
+    <PackageReference Include="CoffeeNova.Valheim.ManagedReferences" Version="1.2214.6" GeneratePathProperty="true" ExcludeAssets="all" NoWarn="NU1701" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>UnpublicizedRefs</_Parameter1>
+      <_Parameter2>$(PkgCoffeeNova_Valheim_ManagedReferences)/lib/net46</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

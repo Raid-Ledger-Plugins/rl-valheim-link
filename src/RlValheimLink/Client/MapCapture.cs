@@ -22,10 +22,12 @@ namespace RlValheimLink.Client
         public static Result Capture(Player p)
         {
             var mm = Minimap.instance;
-            if (mm == null || mm.m_explored == null) return null;
+            if (mm == null) return null;
+            var explored = GameAccess.Explored(mm);
+            if (explored == null) return null;
             int size = mm.m_textureSize;
             if (size < Caps.BitmapEdgeMin || size > Caps.BitmapEdgeMax) { Log.Warn($"minimap textureSize {size} outside the contract range; map not sent"); return null; }
-            if (mm.m_explored.Length != size * size) { Log.Warn($"minimap explored length {mm.m_explored.Length} != {size}²; map not sent"); return null; }
+            if (explored.Length != size * size) { Log.Warn($"minimap explored length {explored.Length} != {size}²; map not sent"); return null; }
 
             var m = new MapMessage
             {
@@ -38,13 +40,14 @@ namespace RlValheimLink.Client
                 BaseMap = null, // the server half fills this in from its own render
             };
 
-            byte[] packedOwn = Bitset.Pack(mm.m_explored, size, size);
+            byte[] packedOwn = Bitset.Pack(explored, size, size);
             m.Explored = new ExploredBitmap { Width = size, Height = size, Data = Bitset.GzipBase64(packedOwn) };
 
             byte[] packedShared = new byte[0];
-            if (mm.m_exploredOthers != null && mm.m_exploredOthers.Length == size * size && Bitset.Any(mm.m_exploredOthers))
+            var others = GameAccess.ExploredOthers(mm);
+            if (others != null && others.Length == size * size && Bitset.Any(others))
             {
-                packedShared = Bitset.Pack(mm.m_exploredOthers, size, size);
+                packedShared = Bitset.Pack(others, size, size);
                 m.SharedExplored = new ExploredBitmap { Width = size, Height = size, Data = Bitset.GzipBase64(packedShared) };
             }
 
@@ -55,11 +58,12 @@ namespace RlValheimLink.Client
 
         private static void Pins(Minimap mm, Player p, List<MapPin> list, StringBuilder hashText)
         {
-            if (mm.m_pins == null) return;
+            var pins = GameAccess.Pins(mm);
+            if (pins == null) return;
             var all = new List<MapPin>();
             var dist = new List<float>();
             Vector3 here = p.transform.position;
-            foreach (var pin in mm.m_pins)
+            foreach (var pin in pins)
             {
                 if (pin == null || !pin.m_save) continue;
                 string type = GameInfo.Identifier(pin.m_type.ToString(), 32);

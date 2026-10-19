@@ -44,6 +44,17 @@ The build prints which option it used:
 `RlValheimLink: game assemblies from NuGet ValheimGameLibs 0.221.4` or
 `… from local install at <path>`.
 
+## Visibility is enforced at runtime
+
+Publicized references only make private members *compile*. Valheim 1.0.20's Unity 6 Mono runtime
+throws `MethodAccessException` / `FieldAccessException` the first time such a call is JIT-compiled
+(this stopped every client send in 0.1.2). So the mod never calls a non-public game member
+directly: `src/RlValheimLink/GameAccess.cs` holds Harmony `AccessTools.FieldRefAccess` accessors for
+the few private fields it reads, and private methods are replaced by public equivalents.
+`tools/visibility-check` (run in CI) scans the built DLL against an unpublicized copy of the game
+assemblies (`CoffeeNova.Valheim.ManagedReferences`, which lags the game: unknown members are
+reported, not failed) and fails on any non-public reference outside `GameAccess`.
+
 ## BepInEx and Unity
 
 `BepInEx.Core 5.4.21` (+ `HarmonyX`, `BepInEx.BaseLib`) and `UnityEngine.Modules 6000.0.75`

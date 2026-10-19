@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 — 2026-10-19
+
+- Fix: the client never sent anything on Valheim 1.0.20 — the runtime enforces member visibility, and the
+  build (compiled against publicized references) called the private `ZRoutedRpc.GetServerPeerID()`
+  directly (`MethodAccessException` every tick, seen in the operator's client log). Every non-public game
+  member the mod reads now goes through Harmony `AccessTools` in `GameAccess.cs` (equipment slots,
+  trophies / known items / recipes, skills, minimap bitsets and pins); routed-RPC ids come from public API.
+- A startup self-check logs `game member access ok|BROKEN`, and CI scans the built DLL against an
+  unpublicized reference assembly so a direct private access can never ship again.
+
 ## 0.1.2 — 2026-10-19
 
 - First version published to Thunderstore as `GamerSaloon-ValheimLink`, from `main` by `release.yml`.

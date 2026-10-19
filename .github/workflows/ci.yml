@@ -85,6 +85,9 @@ jobs:
       - name: Build plugin
         if: steps.restore.outcome == 'success'
         run: dotnet build src/RlValheimLink/RlValheimLink.csproj -c Release --no-restore -warnaserror
+      - name: No direct non-public game member access (the runtime enforces visibility)
+        if: steps.restore.outcome == 'success'
+        run: dotnet run --project tools/visibility-check -- src/RlValheimLink/bin/Release/net48/RlValheimLink.dll
       - name: Record
         run: |
           if [ "${{ steps.restore.outcome }}" = "success" ]; then

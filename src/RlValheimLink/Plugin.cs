@@ -13,7 +13,7 @@ namespace RlValheimLink
         public const string Guid = "RaidLedger.ValheimLink";
         public const string Name = "RL Valheim Link";
         /// <summary>SemVer; must equal ModVersion in Directory.Build.props (CI checks). Goes into every message as modVersion.</summary>
-        public const string Version = "0.1.2";
+        public const string Version = "0.1.3";
 
         public static Plugin Instance { get; private set; }
         private Harmony _harmony;
@@ -26,7 +26,9 @@ namespace RlValheimLink
             Log.RedactSecret(PluginConfig.ServerToken.Value);
             _harmony = new Harmony(Guid);
             _harmony.PatchAll(typeof(Patches));
-            Log.Info($"loaded v{Version} (contract v{Contract.Caps.SchemaVersion}); waiting for ZNet to decide client/server role");
+            string access = GameAccess.SelfCheck();
+            if (access != null) Log.Error("game member access check failed (game update changed a field?): " + access);
+            Log.Info($"loaded v{Version} (contract v{Contract.Caps.SchemaVersion}); game member access {(access == null ? "ok" : "BROKEN")}; waiting for ZNet to decide client/server role");
         }
 
         private void Update()

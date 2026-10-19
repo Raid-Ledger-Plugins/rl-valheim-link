@@ -131,7 +131,7 @@ namespace RlValheimLink.Server
             if (!_active) return;
             try
             {
-                var facts = sender == ZRoutedRpc.instance?.m_id ? PeerIdentity.Self(sender) : PeerIdentity.Get(sender);
+                var facts = sender == GameAccess.OwnRoutedId() ? PeerIdentity.Self(sender) : PeerIdentity.Get(sender);
                 if (facts == null) { Log.Warn($"peer {sender}: {kind} dropped, peer unknown (never seen connected)"); return; }
 
                 switch (kind)
