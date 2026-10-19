@@ -253,9 +253,10 @@ client a few hundred KB of upload once per changed save.
 
 ## 9. Open questions for the operator (defaults in bold)
 
-**Operator ruling 2026-10-18: all defaults accepted except Q9 (name), which is
-being workshopped.** Q8 is answered by ROK-1833 (§6). The list is kept for
-the record.
+**Operator rulings 2026-10-18: all defaults accepted; Q8 answered by ROK-1833
+(§6); Q9 decided: Thunderstore `RaidLedger-ValheimLink` (namespace
+`RaidLedger`, package `ValheimLink`), in-game name "RL Valheim Link", GUID
+`RaidLedger.ValheimLink`.** The list is kept for the record.
 
 1. **Transport:** hand-rolled chunked routed RPC (no Jotunn dependency, §3) or
    Jotunn's `CustomRPC` (already in the pack and on the server; does slicing
@@ -285,11 +286,10 @@ the record.
 8. **Routes:** ANSWERED by ROK-1833 (§6): `POST
    {BaseUrl}/api/plugins/valheim/link/messages/{kind}` and `PUT
    {BaseUrl}/api/plugins/valheim/link/blobs/{sha256}`.
-9. **Thunderstore:** the package namespace/team (`RaidLedger`?) and the mod as
-   a hard dependency of the GamerSaloon pack (the server runs it too, so every
-   client must have it; XPortal-style version enforcement is **not** planned —
-   a client without the mod simply sends nothing). **Default: namespace
-   `RaidLedger`, listed in the pack as "Recommended".**
+9. **Thunderstore:** DECIDED `RaidLedger-ValheimLink` (namespace `RaidLedger`,
+   package `ValheimLink`; dependency string `RaidLedger-ValheimLink-<version>`),
+   listed in the GamerSaloon pack as "Recommended"; no XPortal-style version
+   enforcement — a client without the mod simply sends nothing.
 10. **Items export cadence on mod-set change:** the server asks for a new
     export when the hash of its own BepInEx plugin GUID+version list changes.
     Client-only mods that add items (none in the pack today) would be missed

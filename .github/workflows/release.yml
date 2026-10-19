@@ -33,10 +33,10 @@ jobs:
           cp thunderstore/README.md "$out/README.md"
           cp CHANGELOG.md "$out/CHANGELOG.md"
           cp LICENSE "$out/LICENSE"
-          (cd "$out" && zip -r "../RaidLedger-RLValheimLink-${GITHUB_REF_NAME#v}.zip" .)
+          (cd "$out" && zip -r "../RaidLedger-ValheimLink-${GITHUB_REF_NAME#v}.zip" .)
           ls -la build
       - name: GitHub release with the zip
         uses: softprops/action-gh-release@v2
         with:
-          files: build/RaidLedger-RLValheimLink-*.zip
+          files: build/RaidLedger-ValheimLink-*.zip
           generate_release_notes: true

@@ -11,5 +11,6 @@
 - Server half: logging stub only (pending operator answers to docs/design.md §9).
 - Contract pin refreshed to Raid Ledger main after ROK-1833 (additive: optional `blob` on file icons);
   mock receiver matches the real routes, error codes, rate buckets and quotas.
+- Thunderstore package name decided: `RaidLedger-ValheimLink`.
 - Tooling: mock ingest receiver, ajv + C# fixture validation, contract drift check, CI and release workflows,
   Thunderstore layout.

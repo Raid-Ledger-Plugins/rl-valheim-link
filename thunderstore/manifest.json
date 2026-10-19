@@ -1,8 +1,8 @@
 {
-  "name": "RLValheimLink",
+  "name": "ValheimLink",
   "version_number": "0.1.0",
   "website_url": "https://github.com/Raid-Ledger-Plugins/rl-valheim-link",
-  "description": "Pushes your character, explored map and item catalogue to the group's Raid Ledger. Server + client; per-player opt-out in the config.",
+  "description": "Links this Valheim server to the group's Raid Ledger: pushes your character, explored map and the item catalogue. Server + client; per-player opt-out in the config.",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2351",
     "ValheimModding-JsonDotNET-13.0.4"

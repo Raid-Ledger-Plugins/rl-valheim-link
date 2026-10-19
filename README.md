@@ -61,8 +61,9 @@ BaseUrl`, `ServerToken`, `ServerId`; upload cadence under `[Upload]`. Client: `[
 - CI (`.github/workflows/ci.yml`): `contract-drift` (pin vs upstream main), `fixtures` (ajv +
   C# validator + mock-ingest; **always runs**), `build` (compiles when the game assemblies
   restore; records in the job summary whether it did).
-- Release (`release.yml`): a `v*` tag builds the Thunderstore zip and attaches it to a GitHub
-  release. The `thunderstore/` folder holds the manifest, icon and the Thunderstore README.
+- Release (`release.yml`): a `v*` tag builds the Thunderstore zip `RaidLedger-ValheimLink-<version>.zip`
+  and attaches it to a GitHub release. Thunderstore package: namespace `RaidLedger`, name `ValheimLink`
+  (`thunderstore/` holds the manifest, icon and the Thunderstore README).
 
 ## Third-party sources
 
