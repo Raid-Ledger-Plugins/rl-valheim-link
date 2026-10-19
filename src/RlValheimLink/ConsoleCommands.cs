@@ -15,10 +15,36 @@ namespace RlValheimLink
             _registered = true;
             try
             {
-                new Terminal.ConsoleCommand("rlvl", "RL Valheim Link: rlvl status | rlvl export now | rlvl export items",
-                    (Terminal.ConsoleEvent)Run, false, false, false, false, false, null, false, false, false);
+                // The ConsoleCommand constructor grows a parameter every few game versions (1.0.20 added
+                // hideBehindDevCommands), so pick the ConsoleEvent overload by reflection and fill the rest
+                // with defaults (false / null) instead of binding to one signature at compile time.
+                Terminal.ConsoleEvent handler = Run;
+                var ctor = FindCtor(out var parameters);
+                if (ctor == null) { Log.Warn("console command not registered: no ConsoleCommand(string, string, ConsoleEvent, …) constructor found"); return; }
+                var args = new object[parameters.Length];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    var pt = parameters[i].ParameterType;
+                    if (i == 0) args[i] = "rlvl";
+                    else if (i == 1) args[i] = "RL Valheim Link: rlvl status | rlvl export now | rlvl export items";
+                    else if (pt == typeof(Terminal.ConsoleEvent)) args[i] = handler;
+                    else if (pt == typeof(bool)) args[i] = false;
+                    else args[i] = null;
+                }
+                ctor.Invoke(args);
             }
             catch (Exception e) { Log.Warn("console command not registered: " + e.Message); }
+        }
+
+        private static System.Reflection.ConstructorInfo FindCtor(out System.Reflection.ParameterInfo[] parameters)
+        {
+            foreach (var c in typeof(Terminal.ConsoleCommand).GetConstructors())
+            {
+                var ps = c.GetParameters();
+                if (ps.Length >= 3 && ps[0].ParameterType == typeof(string) && ps[1].ParameterType == typeof(string) && ps[2].ParameterType == typeof(Terminal.ConsoleEvent))
+                { parameters = ps; return c; }
+            }
+            parameters = null; return null;
         }
 
         private static void Run(Terminal.ConsoleEventArgs args)

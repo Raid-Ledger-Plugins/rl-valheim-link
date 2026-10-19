@@ -22,6 +22,25 @@ namespace RlValheimLink.Contract
             return bytes;
         }
 
+        /// <summary>Same packing from a BitArray (Valheim 1.0.x stores Minimap.m_explored as one); index py·width + px.</summary>
+        public static byte[] Pack(System.Collections.BitArray cells, int width, int height)
+        {
+            if (cells == null) throw new ArgumentNullException(nameof(cells));
+            long bits = (long)width * height;
+            if (cells.Length != bits) throw new ArgumentException($"expected {bits} cells, got {cells.Length}");
+            var bytes = new byte[Caps.BitmapBytes(width, height)];
+            for (int i = 0; i < cells.Length; i++)
+                if (cells[i]) bytes[i >> 3] |= (byte)(1 << (i & 7));
+            return bytes;
+        }
+
+        public static bool Any(System.Collections.BitArray cells)
+        {
+            if (cells == null) return false;
+            for (int i = 0; i < cells.Length; i++) if (cells[i]) return true;
+            return false;
+        }
+
         public static bool[] Unpack(byte[] bytes, int width, int height)
         {
             long bits = (long)width * height;

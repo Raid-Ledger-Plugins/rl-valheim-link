@@ -2,19 +2,26 @@
 
 The plugin compiles against the game's managed assemblies. No game DLL is ever committed.
 
-## Option A (default, what CI does): NuGet `ValheimGameLibs`
+## Option A (default, what CI does): NuGet reference packages matching the game build
 
-`src/RlValheimLink/RlValheimLink.csproj` references the community package
-[`ValheimGameLibs`](https://www.nuget.org/packages/ValheimGameLibs) (author `artumino`,
-publicized and stripped game assemblies). Version pinned by `GameLibsVersion` in the csproj
-(`0.221.4`, published 2025-09-10). Operator ruling 2026-10-17: CI compiles against this package.
+`src/RlValheimLink/RlValheimLink.csproj` references
+[`Digitalroot.Valheim.Common.References`](https://www.nuget.org/packages/Digitalroot.Valheim.Common.References)
+(publicized game assemblies with their real names, versioned like the game: `GameRefsVersion`
+= `1.0.20`) and `UnityEngine.Modules` from the BepInEx feed at the game's Unity version
+(`UnityRefsVersion` = `6000.0.75`). The operator's server logs
+`Valheim Version: l-1.0.20` and `Detected Unity version: v6000.0.75f1`; keep both properties in
+step with that log when the game updates (the community `ValheimGameLibs` package stopped at 0.221.4
+and is no longer used). Operator ruling 2026-10-17: CI compiles against NuGet references, no game DLLs
+are committed.
 
-The package ships two Steamworks assemblies with the same types; the csproj drops
-`assembly_steamworks.dll` and keeps `com.rlabrecque.steamworks.net.dll` (the one the game loads).
+No Steamworks reference is shipped: the Steam id is read by reflection into the game's own
+`com.rlabrecque.steamworks.net` at runtime.
 
-When the game updates past the package: bump `GameLibsVersion` if a newer package exists, or
-build with Option B until it does. The mod reads `Version.CurrentVersion` at runtime, so a build
-against an older reference set still reports the installed game version.
+When the game updates past the packages: bump the two versions if newer packages exist, or build
+with Option B until they do. The mod reads `Version.CurrentVersion` at runtime, so a build against an
+older reference set still reports the installed game version — but members can go missing, which
+surfaces as `MissingMethodException` / `MissingFieldException` in the BepInEx log (the captures catch
+and log those; the console command registration is reflection-based for this reason).
 
 ## Option B: your own install (`VALHEIM_INSTALL`)
 
@@ -27,8 +34,7 @@ dotnet build src/RlValheimLink/RlValheimLink.csproj -c Release
 
 The csproj looks for `valheim_Data/Managed` (client) or `valheim_server_Data/Managed` (server)
 under that directory and, when `assembly_valheim.dll` is there, references
-`assembly_valheim`, `assembly_guiutils`, `assembly_utils` and `com.rlabrecque.steamworks.net`
-from it instead of NuGet. The **publicizer step** is
+`assembly_valheim`, `assembly_guiutils` and `assembly_utils` from it instead of NuGet. The **publicizer step** is
 [`BepInEx.AssemblyPublicizer.MSBuild`](https://github.com/BepInEx/BepInEx.AssemblyPublicizer):
 `Publicize="true"` on each game reference makes private members (`Minimap.m_explored`,
 `Player.m_trophies`, `Humanoid.m_helmetItem`, …) visible at compile time. Unity's Mono runtime
@@ -40,7 +46,7 @@ The build prints which option it used:
 
 ## BepInEx and Unity
 
-`BepInEx.Core 5.4.21` (+ `HarmonyX`, `BepInEx.BaseLib`) and `UnityEngine.Modules 2022.3.50`
+`BepInEx.Core 5.4.21` (+ `HarmonyX`, `BepInEx.BaseLib`) and `UnityEngine.Modules 6000.0.75`
 come from `https://nuget.bepinex.dev/v3/index.json` (see `NuGet.config`; source mapping keeps
 nuget.org packages off that feed so a feed outage cannot break the contract library or tests).
 The Thunderstore runtime dependency is `denikson-BepInExPack_Valheim-5.4.2351`.

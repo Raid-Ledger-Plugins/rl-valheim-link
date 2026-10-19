@@ -45,7 +45,7 @@ cd tools/contract-check && npm ci && node validate.mjs ../../fixtures && ./drift
 cd tools/mock-ingest && npm ci && npm test && npm start     # local ingest on :8787
 ```
 
-Output: `src/RlValheimLink/bin/Release/net472/RlValheimLink.dll` + `RlValheimLink.Contract.dll` +
+Output: `src/RlValheimLink/bin/Release/net48/RlValheimLink.dll` + `RlValheimLink.Contract.dll` +
 `RlValheimLink.Core.dll` → copy all three to `BepInEx/plugins/RlValheimLink/` on the client and the server.
 
 ## Config

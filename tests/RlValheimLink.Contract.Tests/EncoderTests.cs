@@ -31,6 +31,7 @@ public class EncoderTests
         var raw = Bitset.Decode(bmp.Data, w, h);
         Assert.Equal(packed, raw);
         Assert.Equal(cells, Bitset.Unpack(raw, w, h));
+        Assert.Equal(packed, Bitset.Pack(new System.Collections.BitArray(cells), w, h)); // the 1.0.x Minimap stores a BitArray
     }
 
     [Fact]
