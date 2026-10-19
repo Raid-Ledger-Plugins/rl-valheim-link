@@ -207,13 +207,13 @@ verified in `api/src/plugins/valheim/link/`):**
 | Messages | `POST {BaseUrl}/api/plugins/valheim/link/messages/{character\|map\|items}` — one route per kind so the server caps the inflated body before reading; the body's `kind` must match the route (400 `kind_mismatch`) |
 | Blobs | `PUT {BaseUrl}/api/plugins/valheim/link/blobs/{sha256}`, raw PNG, `Content-Type: image/png`, **identity encoding only** (gzip → 415) |
 | Auth | `Authorization: Bearer <token>`; `serverId` = the Raid Ledger **Pelican server id as a decimal string**, shown next to the token in the admin dialog; mismatch → 403. Rotating a token kills the old one at once → 401 `invalid_token` |
-| Success | messages: 202 `{ status: "accepted" \| "stale", missingBlobs: [sha256…] }` (stale = an equal-or-newer `capturedAt` is stored; still 202); blobs: 201 `stored` / 200 `exists` |
-| 400 codes | `bad_json`, `bad_gzip`, `schema_invalid` (+ `issues: [{ path, code }]`), `kind_mismatch`, `captured_at_in_future`, `bitmap_invalid` (§6 inflate rule), `blob_ref_mismatch` (ref differs from a stored blob) |
-| 413 | `payload_too_large` (over the kind's §7 cap, declared or streamed) and `quota_exceeded` (per-server storage: 2 000 snapshots / 256 MiB, 2 000 blobs / 2 GiB by default) |
+| Success | messages: 202 `{ status: "accepted" \| "stale", missingBlobs: [sha256…] }` (stale = an equal-or-newer `capturedAt` is stored; still 202); blobs: 201 / 200 `{ status: "stored" \| "exists", sha256 }` |
+| 400 codes | messages: `bad_json`, `bad_gzip`, `schema_invalid` (+ `issues: [{ path, code }]`), `kind_mismatch`, `unknown_kind`, `captured_at_in_future`, `bitmap_invalid` (§6 inflate rule), `blob_ref_mismatch`; blobs: `not_png`, `bad_ihdr`, `hash_mismatch`; token for a non-Valheim server: `server_not_valheim` (the full enum is `ValheimLinkIngestErrorCodeSchema` in the contract package) |
+| 413 | `payload_too_large` (over the kind's §7 cap, declared or streamed), `png_too_large` (blob over 16 MiB) and `quota_exceeded` (per-server storage: 2 000 snapshots / 256 MiB, 2 000 blobs / 2 GiB by default) |
 | 415 | `unsupported_media` (content type or encoding) |
 | 429 | `rate_limited` + `Retry-After`; per-server buckets **60 messages/min** and **20 blobs/min** (`VALHEIM_LINK_RATE_*_PER_MIN`), plus 30 failed auths/min per IP |
 | Body size in prod | nginx caps request bodies at **10 MiB until ROK-1850** lands (16 MiB per contract after it); the mod keeps blobs ≤ `Upload.MaxBlobBytes` (default 10 MiB) until then |
-| Error body | `{ error: <code>, message }` — never echoes the payload or the token |
+| Error body | `{ code, message }` (+ `issues: [{ path, code }]` on `schema_invalid`) — verified on the acceptance env; never echoes the payload or the token |
 
 Config keys the admin dialog tells operators to paste: `RaidLedger.BaseUrl`,
 `RaidLedger.ServerId`, `RaidLedger.ServerToken` (§8). `MessagesPath` /

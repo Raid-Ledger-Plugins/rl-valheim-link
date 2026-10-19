@@ -121,7 +121,8 @@ namespace RlValheimLink.Core
             try
             {
                 var o = JObject.Parse(text);
-                r.Code = (string)(o["status"] as JValue) ?? (string)(o["error"] as JValue) ?? (r.Success ? "ok" : "unknown");
+                // Real shape (verified on the acceptance env 2026-10-19): errors are { code, message[, issues] }; success is { status, missingBlobs } / { status, … }.
+                r.Code = (string)(o["status"] as JValue) ?? (string)(o["code"] as JValue) ?? (string)(o["error"] as JValue) ?? (r.Success ? "ok" : "unknown");
                 r.Message = Truncate((string)(o["message"] as JValue), 200);
                 if (o["issues"] is JArray issues)
                 {
