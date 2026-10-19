@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6 — 2026-10-19
+
+- Fix: logging out while an item-catalogue export was queued lost everything, including the character and
+  map — the multi-megabyte atlas sat ahead of them and the connection closed before any of it drained. At
+  logout/quit the client now sends only the small snapshots (character first, then map) and drops large
+  transfers; the server asks for the catalogue again on the next join. Seen on the operator's second
+  admin join.
+
 ## 0.1.5 — 2026-10-19
 
 - The server notices when its upload target changed (Raid Ledger instance rebuilt or moved, server id or

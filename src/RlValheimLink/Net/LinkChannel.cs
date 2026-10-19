@@ -90,18 +90,42 @@ namespace RlValheimLink.Net
 
         public static void Tick() => Pump(ChunksPerTick, false);
 
+        /// <summary>Largest transfer worth pushing through a closing socket.</summary>
+        private const int MaxLogoutTransferBytes = 256 * 1024;
+
         /// <summary>
-        /// Send every queued chunk right now, ignoring the per-frame budget and the socket back-pressure,
-        /// then flush the socket. Used on logout/quit: the game saves the profile and tears the connection
-        /// down in the same frame, so anything left for a later Update is lost with the socket.
+        /// Logout/quit: the game saves the profile and tears the connection down in the same frame, so
+        /// anything left for a later Update is lost with the socket. Send the small, latest snapshots
+        /// now — character first, then map — ignoring the per-frame budget and back-pressure, and
+        /// DROP anything big (an items export or a blob): a multi-MB atlas ahead of the character in the
+        /// queue starved both and the socket closed with nothing delivered. The server re-requests the
+        /// items export on the next join.
         /// </summary>
-        public static void FlushAll()
+        public static void FlushForLogout()
         {
-            int before = QueuedTransfers;
-            if (before == 0) return;
+            if (QueuedTransfers == 0) return;
+            var all = new List<Outgoing>();
+            if (_current != null) all.Add(_current);
+            all.AddRange(SendQueue);
+            _current = null; SendQueue.Clear();
+
+            int Priority(PayloadKind k) => k == PayloadKind.Character ? 0 : k == PayloadKind.Map ? 1 : k == PayloadKind.Hello ? 2 : 3;
+            all.Sort((a, b) => Priority(a.Kind).CompareTo(Priority(b.Kind)));
+            int sent = 0, dropped = 0;
+            foreach (var o in all)
+            {
+                if (o.Payload.Length > MaxLogoutTransferBytes || Priority(o.Kind) >= 3)
+                {
+                    dropped++;
+                    Log.Info($"logout: {o.Label} ({o.Payload.Length} bytes) not sent — too large for a closing connection; the server asks again next session");
+                    continue;
+                }
+                SendQueue.Enqueue(o);
+                sent++;
+            }
             Pump(int.MaxValue, true);
             try { ZNet.instance?.GetServerPeer()?.m_socket?.Flush(); } catch (Exception e) { Log.Debug("socket flush: " + e.Message); }
-            Log.Info($"flushed {before} transfer(s) synchronously (logout/quit)");
+            Log.Info($"logout: flushed {sent} transfer(s) synchronously, dropped {dropped}");
         }
 
         private static void Pump(int maxChunks, bool ignoreBackPressure)
