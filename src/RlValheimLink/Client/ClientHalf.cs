@@ -100,8 +100,8 @@ namespace RlValheimLink.Client
             catch (Exception e) { Log.Error("map capture failed", e); }
 
             // Logout and quit save with setLogoutPoint = true and close the connection in this same frame:
-            // push everything out now or it never leaves the client.
-            if (setLogoutPoint) LinkChannel.FlushAll();
+            // push the small snapshots out now (big transfers are dropped; the server re-asks next session).
+            if (setLogoutPoint) { ItemsCapture.Cancel(); LinkChannel.FlushForLogout(); }
         }
 
         /// <summary>Validate → serialise → size check → gzip → queue. Returns false (and logs why) when nothing was sent.</summary>
