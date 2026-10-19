@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>RlValheimLink.Contract</AssemblyName>
+    <RootNamespace>RlValheimLink.Contract</RootNamespace>
+    <Description>RL Valheim Link: message model, JSON writer, pre-send validator and encoders for the pinned Raid Ledger valheim-link v1 contract. No Unity or game references.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Runtime copy comes from the ValheimModding-JsonDotNET Thunderstore package (13.0.x). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

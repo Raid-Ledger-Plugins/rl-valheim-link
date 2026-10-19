@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. The pinned copy of the contract must match Raid Ledger main byte for byte. Fails loudly on drift.
+  contract-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Diff contract/v1 against Raid Ledger main
+        run: tools/contract-check/drift-check.sh
+
+  # 2. Fixture validation: ALWAYS runs, with or without game assemblies.
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '9.0.x' }
+      - name: ajv — golden fixtures and the mod's own fixtures validate against schema.json
+        run: |
+          cd tools/contract-check && npm ci --no-audit --no-fund
+          node validate.mjs ../../contract/v1/fixtures
+          node validate.mjs ../../fixtures
+          node validate.mjs --expect-invalid ../../contract/v1/fixtures/invalid
+      - name: CSharp pre-send validator — tests (golden pass, invalid rejected per EXPECTED.json, fixtures reproduce)
+        run: dotnet test tests/RlValheimLink.Contract.Tests -nologo
+      - name: CSharp pre-send validator — CLI over fixtures (with bitmap inflate) and the invalid set
+        run: |
+          dotnet run --project tools/validate-cli -- --inflate fixtures
+          dotnet run --project tools/validate-cli -- --inflate contract/v1/fixtures
+          dotnet run --project tools/validate-cli -- --expect-invalid contract/v1/fixtures/invalid
+      - name: mock-ingest accepts the fixtures and enforces token / serverId / caps / 429
+        run: cd tools/mock-ingest && npm ci --no-audit --no-fund && npm test
+      - name: Record
+        run: echo "fixture validation (ajv + CSharp validator + mock-ingest) ran" >> "$GITHUB_STEP_SUMMARY"

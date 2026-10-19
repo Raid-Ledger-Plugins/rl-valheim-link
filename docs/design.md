@@ -1,9 +1,10 @@
 # RL Valheim Link — design (ROK-1834)
 
-Status: **draft for operator review**. The client half, the contract library,
-the mock receiver and CI are built against this document. **The server half
-(receive → dedupe → upload) is not built until the open questions in §9 are
-answered**, per the working method.
+Status: **reviewed by the operator 2026-10-18** — every §9 default accepted
+except the Thunderstore name (Q9), still being workshopped. ROK-1833 (the
+ingest endpoint) merged the same day, which answered Q8 with real routes and
+limits (§6) and added one additive field to the contract (§10). The server
+half is the next slice.
 
 Reader's contract: `contract/v1/CONTRACT.md` is the wire format and wins over
 anything here. This document says how the mod reads the game and moves bytes
@@ -189,9 +190,31 @@ once per request and **never** appears in any log line, exception message,
 spool file or `RLVL_Control` payload (a dedicated test fails the build if the
 logger ever sees a string containing it).
 
-Routes are config values because ROK-1833 has not landed: `MessagesPath`
-(default `/api/valheim-link/messages`) and `BlobsPath` (default
-`/api/valheim-link/blobs/{sha256}`); see §9 Q8.
+**The real endpoint (ROK-1833, merged 2026-10-18, Raid Ledger PR #1671;
+verified in `api/src/plugins/valheim/link/`):**
+
+| Fact | Value |
+|---|---|
+| Messages | `POST {BaseUrl}/api/plugins/valheim/link/messages/{character\|map\|items}` — one route per kind so the server caps the inflated body before reading; the body's `kind` must match the route (400 `kind_mismatch`) |
+| Blobs | `PUT {BaseUrl}/api/plugins/valheim/link/blobs/{sha256}`, raw PNG, `Content-Type: image/png`, **identity encoding only** (gzip → 415) |
+| Auth | `Authorization: Bearer <token>`; `serverId` = the Raid Ledger **Pelican server id as a decimal string**, shown next to the token in the admin dialog; mismatch → 403. Rotating a token kills the old one at once → 401 `invalid_token` |
+| Success | messages: 202 `{ status: "accepted" \| "stale", missingBlobs: [sha256…] }` (stale = an equal-or-newer `capturedAt` is stored; still 202); blobs: 201 `stored` / 200 `exists` |
+| 400 codes | `bad_json`, `bad_gzip`, `schema_invalid` (+ `issues: [{ path, code }]`), `kind_mismatch`, `captured_at_in_future`, `bitmap_invalid` (§6 inflate rule), `blob_ref_mismatch` (ref differs from a stored blob) |
+| 413 | `payload_too_large` (over the kind's §7 cap, declared or streamed) and `quota_exceeded` (per-server storage: 2 000 snapshots / 256 MiB, 2 000 blobs / 2 GiB by default) |
+| 415 | `unsupported_media` (content type or encoding) |
+| 429 | `rate_limited` + `Retry-After`; per-server buckets **60 messages/min** and **20 blobs/min** (`VALHEIM_LINK_RATE_*_PER_MIN`), plus 30 failed auths/min per IP |
+| Body size in prod | nginx caps request bodies at **10 MiB until ROK-1850** lands (16 MiB per contract after it); the mod keeps blobs ≤ `Upload.MaxBlobBytes` (default 10 MiB) until then |
+| Error body | `{ error: <code>, message }` — never echoes the payload or the token |
+
+Config keys the admin dialog tells operators to paste: `RaidLedger.BaseUrl`,
+`RaidLedger.ServerId`, `RaidLedger.ServerToken` (§8). `MessagesPath` /
+`BlobsPath` stay configurable with these as defaults. The state machine above
+maps the codes as: 400 → drop + ERROR (our bug or contract drift; `issues`
+logged as path/code only); 401 → HALT until the token changes, with the
+"paste the new token from the admin dialog" hint; 403 → HALT (wrong
+`ServerId`); 413 `quota_exceeded` → BACKOFF 10 min + WARN (the admin must
+raise the quota or prune); 429 → honour `Retry-After`; `stale` → treat as
+success and advance the dedupe watermark.
 
 ## 7. Size budget per kind vs CONTRACT.md §7
 
@@ -213,9 +236,10 @@ client a few hundred KB of upload once per changed save.
 | `RaidLedger.BaseUrl` | `` | server | `https://raid.gamernight.net` (no trailing slash) |
 | `RaidLedger.ServerToken` | `` | server | per-server bearer token from RL admin; never logged |
 | `RaidLedger.ServerId` | `` | server | RL's id for this game server; goes into every message |
-| `RaidLedger.MessagesPath` / `BlobsPath` | see §6 | server | routes, until ROK-1833 fixes them |
+| `RaidLedger.MessagesPath` / `BlobsPath` | `/api/plugins/valheim/link/messages/{kind}` / `/api/plugins/valheim/link/blobs/{sha256}` | server | the ROK-1833 routes (§6); overridable for a mock on another path |
 | `Upload.IntervalSeconds` | 5 | server | min gap between HTTP requests |
-| `Upload.MaxPerMinute` | 20 | server | per-server request budget |
+| `Upload.MaxMessagesPerMinute` / `MaxBlobsPerMinute` | 30 / 10 | server | self-imposed budgets, half the endpoint's 60 / 20 so two restarts in a minute never trip 429 |
+| `Upload.MaxBlobBytes` | 10 485 760 | server | largest PNG the mod will PUT; raise to 16 777 216 after ROK-1850 |
 | `Upload.Gzip` | true | server | `Content-Encoding: gzip` on message bodies |
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
@@ -228,6 +252,10 @@ client a few hundred KB of upload once per changed save.
 | `Items.IconSize` | 64 | client | atlas icon edge in px |
 
 ## 9. Open questions for the operator (defaults in bold)
+
+**Operator ruling 2026-10-18: all defaults accepted except Q9 (name), which is
+being workshopped.** Q8 is answered by ROK-1833 (§6). The list is kept for
+the record.
 
 1. **Transport:** hand-rolled chunked routed RPC (no Jotunn dependency, §3) or
    Jotunn's `CustomRPC` (already in the pack and on the server; does slicing
@@ -254,11 +282,9 @@ client a few hundred KB of upload once per changed save.
    + height shading + water), rendered by the server half at world load.
    Good enough for V7 (ROK-1837), or does V7 want a specific palette?
    **Default: in-game approximation.**
-8. **Routes:** ROK-1833 has not fixed them. Assumed `POST
-   <BaseUrl>/api/valheim-link/messages` and `PUT
-   <BaseUrl>/api/valheim-link/blobs/<sha256>` (`Content-Type: image/png`,
-   same bearer), configurable until confirmed. Can the Raid Ledger Lead
-   confirm or correct these before the server half is built?
+8. **Routes:** ANSWERED by ROK-1833 (§6): `POST
+   {BaseUrl}/api/plugins/valheim/link/messages/{kind}` and `PUT
+   {BaseUrl}/api/plugins/valheim/link/blobs/{sha256}`.
 9. **Thunderstore:** the package namespace/team (`RaidLedger`?) and the mod as
    a hard dependency of the GamerSaloon pack (the server runs it too, so every
    client must have it; XPortal-style version enforcement is **not** planned —
@@ -271,7 +297,12 @@ client a few hundred KB of upload once per changed save.
 
 ## 10. Contract change requests
 
-None. Everything the mod reads fits v1. Things noted for the Raid Ledger side
+None. Everything the mod reads fits v1. **Received (additive, 2026-10-18,
+pinned at the commit in `contract/PIN.md`):** a `file` item icon may carry an
+optional `blob` binary ref so a per-file PNG goes through the blob route.
+The mod emits atlas icons, so it does not use this field; the model,
+validator and fixtures support it (`fixtures/items-file-icons.json`) so a
+future per-file mode can without a contract change. Things noted for the Raid Ledger side
 (not changes): the pin type enum now also contains `Player`, `RandomEvent`,
 `Ping`, `EventArea`, `Hildir1-3` and `None`; only saved pins are sent.
 `ItemType` now has `Trinket`, `TwoHandedWeaponLeft`, `AmmoNonEquipable`,
