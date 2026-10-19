@@ -48,5 +48,6 @@ cd tools/mock-ingest && npm test && npm start            # mock receiver
 - Log lines start with `RLVL:`; the token is masked by `Log` and must never reach a log, exception text, spool file or RPC. Pin labels are player free text: never log them.
 - Every message goes through `Validator.Validate` before it is serialised for the wire; anything with issues is logged and **not sent**.
 - Server-side trust: identity comes from the peer's socket, never from the client's claim (design §4).
+- The game runtime ENFORCES member visibility even though we compile against publicized references: never touch a non-public game member directly; add an accessor to `src/RlValheimLink/GameAccess.cs` (Harmony `AccessTools`) instead. `tools/visibility-check` fails CI otherwise.
 - The game API this is compiled against is `Digitalroot.Valheim.Common.References` at the game's version (`GameRefsVersion` in the csproj, 1.0.20 = Valheim 1.0.20 on Unity 6000.0.75); members used are listed in `docs/design.md` §2. UNVERIFIED items there are confirmed by the operator checklist, not by assumption.
 - Server-half logic lives in `RlValheimLink.Core` so it is unit-tested and driven against the mock (`UploaderMockTests` spawns `node tools/mock-ingest/server.mjs`); `Server/` in the plugin only touches game objects. Keep it that way.

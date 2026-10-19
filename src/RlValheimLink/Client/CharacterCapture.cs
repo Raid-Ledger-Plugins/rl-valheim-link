@@ -29,23 +29,23 @@ namespace RlValheimLink.Client
             Equipment(p, m.Equipment);
             Inventory(p, m.Inventory);
             Skills(p, m.Skills);
-            m.Trophies = PrefabList(p.m_trophies, Caps.TrophiesMax, "trophies");
-            m.KnownItems = PrefabList(p.m_knownMaterial, Caps.KnownMax, "knownItems");
-            m.KnownRecipes = PrefabList(p.m_knownRecipes, Caps.KnownMax, "knownRecipes");
+            m.Trophies = PrefabList(GameAccess.Trophies(p), Caps.TrophiesMax, "trophies");
+            m.KnownItems = PrefabList(GameAccess.KnownMaterial(p), Caps.KnownMax, "knownItems");
+            m.KnownRecipes = PrefabList(GameAccess.KnownRecipes(p), Caps.KnownMax, "knownRecipes");
             return m;
         }
 
         private static void Equipment(Humanoid h, List<EquippedItem> list)
         {
-            Add(list, EquipSlot.Head, h.m_helmetItem);
-            Add(list, EquipSlot.Chest, h.m_chestItem);
-            Add(list, EquipSlot.Legs, h.m_legItem);
-            Add(list, EquipSlot.Shoulder, h.m_shoulderItem);
-            Add(list, EquipSlot.Utility, h.m_utilityItem);
-            Add(list, EquipSlot.Trinket, h.m_trinketItem);
-            Add(list, EquipSlot.RightHand, h.m_rightItem);
-            Add(list, EquipSlot.LeftHand, h.m_leftItem);
-            Add(list, EquipSlot.Ammo, h.m_ammoItem);
+            Add(list, EquipSlot.Head, GameAccess.HelmetItem(h));
+            Add(list, EquipSlot.Chest, GameAccess.ChestItem(h));
+            Add(list, EquipSlot.Legs, GameAccess.LegItem(h));
+            Add(list, EquipSlot.Shoulder, GameAccess.ShoulderItem(h));
+            Add(list, EquipSlot.Utility, GameAccess.UtilityItem(h));
+            Add(list, EquipSlot.Trinket, GameAccess.TrinketItem(h));
+            Add(list, EquipSlot.RightHand, GameAccess.RightItem(h));
+            Add(list, EquipSlot.LeftHand, GameAccess.LeftItem(h));
+            Add(list, EquipSlot.Ammo, GameAccess.AmmoItem(h));
         }
 
         private static void Add(List<EquippedItem> list, string slot, ItemDrop.ItemData d)
@@ -121,9 +121,10 @@ namespace RlValheimLink.Client
         private static void Skills(Player p, List<Skill> list)
         {
             var skills = p.GetSkills();
-            if (skills == null || skills.m_skillData == null) return;
+            var data = skills == null ? null : GameAccess.SkillData(skills);
+            if (data == null) return;
             var seen = new HashSet<string>();
-            foreach (var kv in skills.m_skillData)
+            foreach (var kv in data)
             {
                 string id = GameInfo.Identifier(kv.Key.ToString(), 64);
                 if (id == null || !seen.Add(id)) continue;

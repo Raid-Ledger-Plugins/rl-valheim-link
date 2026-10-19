@@ -96,7 +96,8 @@ namespace RlValheimLink.Net
             var rpc = ZRoutedRpc.instance;
             var znet = ZNet.instance;
             if (rpc == null || znet == null) return;
-            long target = rpc.GetServerPeerID();
+            long target = GameAccess.ServerRoutedId();
+            if (target == 0L) return; // not connected yet
 
             for (int n = 0; n < ChunksPerTick; n++)
             {
@@ -217,8 +218,7 @@ namespace RlValheimLink.Net
             try
             {
                 // Only the server may steer a client.
-                var rpc = ZRoutedRpc.instance;
-                if (_isServer || rpc == null || sender != rpc.GetServerPeerID()) return;
+                if (_isServer || sender != GameAccess.ServerRoutedId()) return;
                 int protocol = pkg.ReadInt();
                 if (protocol != Protocol) return;
                 string op = pkg.ReadString();
