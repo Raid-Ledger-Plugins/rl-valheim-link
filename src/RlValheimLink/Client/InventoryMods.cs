@@ -16,8 +16,8 @@ namespace RlValheimLink.Client
         private const string AzuEpiGuid = "Azumatt.AzuExtendedPlayerInventory";
 
         private static bool _probed;
-        private static MethodInfo _isEquipmentSlot, _isQuickSlot;
-        private static Type _vector2i;
+        /// <summary>EquipmentAndQuickSlots 3.x: `public static bool API.IsSlotCell(int x, int y, out string slotId)`.</summary>
+        private static MethodInfo _isSlotCell;
         private static bool _azuEpi;
 
         private static void Probe()
@@ -29,33 +29,35 @@ namespace RlValheimLink.Client
                 _azuEpi = Chainloader.PluginInfos.ContainsKey(AzuEpiGuid);
                 if (Chainloader.PluginInfos.TryGetValue(EaqsGuid, out var eaqs) && eaqs.Instance != null)
                 {
-                    var asm = eaqs.Instance.GetType().Assembly;
-                    foreach (var t in asm.GetTypes())
-                    {
-                        var eq = t.GetMethod("IsEquipmentSlot", BindingFlags.Public | BindingFlags.Static);
-                        var qs = t.GetMethod("IsQuickSlot", BindingFlags.Public | BindingFlags.Static);
-                        if (eq != null && eq.GetParameters().Length == 1 && _isEquipmentSlot == null) { _isEquipmentSlot = eq; _vector2i = eq.GetParameters()[0].ParameterType; }
-                        if (qs != null && qs.GetParameters().Length == 1 && _isQuickSlot == null) _isQuickSlot = qs;
-                    }
-                    Log.Info($"EquipmentAndQuickSlots detected: IsEquipmentSlot={(_isEquipmentSlot != null)} IsQuickSlot={(_isQuickSlot != null)}");
+                    var api = eaqs.Instance.GetType().Assembly.GetType("EquipmentAndQuickSlots.API", false);
+                    _isSlotCell = api?.GetMethod("IsSlotCell", BindingFlags.Public | BindingFlags.Static, null,
+                        new[] { typeof(int), typeof(int), typeof(string).MakeByRefType() }, null);
+                    Log.Info($"EquipmentAndQuickSlots {eaqs.Metadata.Version} detected: API.IsSlotCell={(_isSlotCell != null)}");
                 }
             }
             catch (Exception e) { Log.Warn("inventory mod probe failed: " + e.Message); }
         }
 
-        /// <summary>Purpose of row <paramref name="y"/> (≥ 4) in a grid of <paramref name="width"/> columns.</summary>
+        /// <summary>
+        /// Purpose of row <paramref name="y"/> (≥ 4) in a grid of <paramref name="width"/> columns: the
+        /// first EAQS slot cell in the row decides (a slot id containing "quick" is a quick slot, any other
+        /// EAQS slot is an equipment slot); AzuExtendedPlayerInventory rows are "extended"; else "other".
+        /// </summary>
         public static string PurposeOf(int y, int width)
         {
             Probe();
             try
             {
-                if (_vector2i != null)
+                if (_isSlotCell != null)
                 {
                     for (int x = 0; x < width; x++)
                     {
-                        object pos = Activator.CreateInstance(_vector2i, x, y);
-                        if (_isEquipmentSlot != null && (bool)_isEquipmentSlot.Invoke(null, new[] { pos })) return RowPurpose.Equipment;
-                        if (_isQuickSlot != null && (bool)_isQuickSlot.Invoke(null, new[] { pos })) return RowPurpose.Quickslot;
+                        var args = new object[] { x, y, null };
+                        if ((bool)_isSlotCell.Invoke(null, args))
+                        {
+                            string id = args[2] as string ?? "";
+                            return id.IndexOf("quick", StringComparison.OrdinalIgnoreCase) >= 0 ? RowPurpose.Quickslot : RowPurpose.Equipment;
+                        }
                     }
                 }
             }

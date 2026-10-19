@@ -70,15 +70,14 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   unless `m_shared.m_useDurability`. Prefab id = `m_dropPrefab.name`,
   falling back to `ObjectDB.instance.GetItemPrefab(m_shared).name`.
   `extraRows`: every row `y ≥ 4` gets a purpose from the inventory mod that
-  is loaded (`BepInEx.Bootstrap.Chainloader.PluginInfos`): EquipmentAndQuickSlots
-  (`randyknapp.mods.equipmentandquickslots`) is asked through reflection
-  whether cell `(0, y)` is an equipment or quick slot (UNVERIFIED method
-  names; falls back to `other`); AzuExtendedPlayerInventory rows are
-  `extended`; anything else is `other`.
+  is loaded (see the EquipmentAndQuickSlots bullet below).
 - Skills: `Skills.m_skillData` → `id = SkillType.ToString()`, `m_level`,
   `m_accumulator`.
 - Trophies / known: `Player.m_trophies`, `m_knownMaterial`, `m_knownRecipes`
   (HashSets, sorted ordinal before emit so output is stable).
+- Inventory rows past the vanilla four are named through EquipmentAndQuickSlots 3.x's official
+  `API.IsSlotCell(x, y, out slotId)` (a slot id containing "quick" is a quick slot, any other EAQS
+  slot is an equipment slot); AzuExtendedPlayerInventory rows are `extended`; otherwise `other`.
 - Map: `Minimap.instance.m_textureSize`, `m_pixelSize`, `m_explored`,
   `m_exploredOthers` (`BitArray` since Valheim 1.0.x, `bool[]` before; index
   `py * size + px`, `py = 0` south — the same layout the contract's bitset
@@ -143,7 +142,7 @@ Raid Ledger server id and can never spoof identity:
 | `character.steamId` | **replaced** by the sender peer's socket identity: `ZNetPeer.m_socket.GetHostName()` (`ZSteamSocket` gives the SteamID64 digits). A non-Steam identity (PlayFab/crossplay) is **rejected** unless `TrustClientSteamId=true` (§9 Q2). For a non-dedicated host's own captures the local `SteamUser.GetSteamID()` is used. |
 | `character.playerId` | must equal `ZDOMan.instance.GetZDO(peer.m_characterID).GetLong(ZDOVars.s_playerID)`; mismatch → rejected and logged |
 | `capturedAt` | client clock; **replaced by the server's clock when it differs by more than 60 s** (logged once per peer), so a skewed client never trips the contract's +5 min rule or pins "latest" wrongly |
-| `modVersion` | must equal the server's own mod version (same pack); mismatch → rejected with `RLVL_Control reject modVersion` |
+| `modVersion` | logged, not matched: the client and server must speak the same **RPC protocol** (`LinkChannel.Protocol`, carried in every chunk and in the hello); a different protocol → `RLVL_Control reject protocol`. `Server.RequireExactModVersion = true` restores strict equality for a test window |
 
 Then the whole message runs through the **same validator** the client used,
 and only a clean message is serialised (`Formatting.None`, UTF-8, no BOM) —

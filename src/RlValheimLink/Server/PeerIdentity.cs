@@ -15,6 +15,7 @@ namespace RlValheimLink.Server
         public DateTime SeenUtc;
         public string ModSetHash;     // from hello
         public string GameVersion;    // from hello
+        public string ModVersion;     // from hello (logged; the RPC protocol is what must match)
     }
 
     internal static class PeerIdentity
@@ -81,10 +82,10 @@ namespace RlValheimLink.Server
             return f;
         }
 
-        public static void RememberHello(long uid, string gameVersion, string modSetHash)
+        public static void RememberHello(long uid, string gameVersion, string modSetHash, string modVersion)
         {
             var f = Get(uid) ?? new PeerFacts { Uid = uid, SeenUtc = DateTime.UtcNow };
-            f.GameVersion = gameVersion; f.ModSetHash = modSetHash;
+            f.GameVersion = gameVersion; f.ModSetHash = modSetHash; f.ModVersion = modVersion;
             Cache[uid] = f;
         }
     }

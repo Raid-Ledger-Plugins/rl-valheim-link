@@ -166,6 +166,8 @@ namespace RlValheimLink.Net
                 rpc.InvokeRoutedRPC(target, RpcChunk, pkg);
 
                 _current.NextChunk++;
+                if (_current.TotalChunks >= 40 && _current.NextChunk < _current.TotalChunks && (_current.NextChunk * 4) % _current.TotalChunks < 4)
+                    Log.Info($"sending {_current.Label}: {_current.NextChunk * 100 / _current.TotalChunks}% ({_current.NextChunk}/{_current.TotalChunks} chunks)");
                 if (_current.NextChunk >= _current.TotalChunks)
                 {
                     Log.Info($"sent {_current.Label}: transfer #{_current.Id} complete ({_current.TotalChunks} chunk(s), {_current.Payload.Length} bytes)");
