@@ -42,7 +42,8 @@ namespace RlValheimLink.Server
                     f.HostName = host ?? "";
                     var m = SteamDigits.Match(f.HostName);
                     f.SteamId = m.Success && string.CompareOrdinal(m.Groups[1].Value, Contract.Caps.SteamId64Min) >= 0 ? m.Groups[1].Value : null;
-                    try { f.IsAdmin = f.SteamId != null && znet.IsAdmin(f.SteamId); } catch { f.IsAdmin = false; }
+                    // adminlist.txt entries are "Steam_7656…" since 1.0 (older files hold bare digits); accept either.
+                    try { f.IsAdmin = f.SteamId != null && (znet.IsAdmin(f.SteamId) || znet.IsAdmin("Steam_" + f.SteamId) || (f.HostName.Length > 0 && znet.IsAdmin(f.HostName))); } catch { f.IsAdmin = false; }
                     try
                     {
                         if (!peer.m_characterID.IsNone())
