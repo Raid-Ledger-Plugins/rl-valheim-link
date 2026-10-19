@@ -14,7 +14,7 @@ to the server; it never restates or reinterprets a format rule.
 
 ## 1. Shape
 
-One assembly, `RlValheimLink.dll` (BepInEx 5, `net472`), loaded by the player
+One assembly, `RlValheimLink.dll` (BepInEx 5, `net48`), loaded by the player
 client **and** the dedicated server. Plus `RlValheimLink.Contract.dll`
 (`netstandard2.0`, no Unity or game references) holding the message model,
 the JSON writer, the pre-send validator, the bitset/gzip/base64 encoder and a
@@ -80,8 +80,9 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
 - Trophies / known: `Player.m_trophies`, `m_knownMaterial`, `m_knownRecipes`
   (HashSets, sorted ordinal before emit so output is stable).
 - Map: `Minimap.instance.m_textureSize`, `m_pixelSize`, `m_explored`,
-  `m_exploredOthers` (bool[], index `py * size + px`, `py = 0` south — the
-  same layout the contract's bitset uses, so packing is a straight loop),
+  `m_exploredOthers` (`BitArray` since Valheim 1.0.x, `bool[]` before; index
+  `py * size + px`, `py = 0` south — the same layout the contract's bitset
+  uses, so packing is a straight loop),
   `m_pins` where `m_save` is true (transient Player/Ping/Shout/event pins are
   not saved and not sent); `shared = m_ownerID != 0` (UNVERIFIED: vanilla sets
   `m_ownerID` on pins that arrived from a cartography table).

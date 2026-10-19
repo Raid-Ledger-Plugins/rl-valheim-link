@@ -42,7 +42,7 @@ namespace RlValheimLink.Client
             m.Explored = new ExploredBitmap { Width = size, Height = size, Data = Bitset.GzipBase64(packedOwn) };
 
             byte[] packedShared = new byte[0];
-            if (mm.m_exploredOthers != null && mm.m_exploredOthers.Length == size * size && Any(mm.m_exploredOthers))
+            if (mm.m_exploredOthers != null && mm.m_exploredOthers.Length == size * size && Bitset.Any(mm.m_exploredOthers))
             {
                 packedShared = Bitset.Pack(mm.m_exploredOthers, size, size);
                 m.SharedExplored = new ExploredBitmap { Width = size, Height = size, Data = Bitset.GzipBase64(packedShared) };
@@ -52,8 +52,6 @@ namespace RlValheimLink.Client
             Pins(mm, p, m.Pins, pinText);
             return new Result { Message = m, ContentHash = GameInfo.Sha256Hex(packedOwn, packedShared, Encoding.UTF8.GetBytes(pinText.ToString())) };
         }
-
-        private static bool Any(bool[] cells) { foreach (var c in cells) if (c) return true; return false; }
 
         private static void Pins(Minimap mm, Player p, List<MapPin> list, StringBuilder hashText)
         {

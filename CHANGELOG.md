@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1 — 2026-10-19
+
+- Build against the game build the operator runs: Valheim **1.0.20** on Unity **6000.0.75** via the
+  `Digitalroot.Valheim.Common.References` and `UnityEngine.Modules` packages (ValheimGameLibs stopped at 0.221.4).
+- Console command registration no longer binds one `ConsoleCommand` constructor signature (1.0.20 added a
+  parameter and the old binding threw `MissingMethodException` at every Terminal init); it picks the
+  `ConsoleEvent` overload by reflection.
+- Steam id read through reflection into the game's own Steamworks.NET; no Steamworks reference shipped.
+- First real-endpoint findings: the server half renders the 2048² base map in ~21 s on the dedicated server
+  and queues it; error bodies are `{ code, message }` (fixed in 0.1.0's PR 4).
+
 ## 0.1.0 — unreleased
 
 - Contract library (`RlValheimLink.Contract`): message model, JSON writer, pre-send validator covering

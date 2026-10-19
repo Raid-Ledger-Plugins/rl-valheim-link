@@ -30,12 +30,30 @@ namespace RlValheimLink.Client
             return v ?? "0.0.0";
         }
 
+        private static System.Reflection.MethodInfo _getSteamId;
+        private static System.Reflection.FieldInfo _steamIdField;
+
+        /// <summary>SteamUser.GetSteamID().m_SteamID via reflection into the game's Steamworks.NET copy, so the mod carries no Steamworks reference that could drift.</summary>
         public static string LocalSteamId()
         {
             try
             {
-                ulong id = Steamworks.SteamUser.GetSteamID().m_SteamID;
-                if (id > 0) return id.ToString();
+                if (_getSteamId == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = asm.GetType("Steamworks.SteamUser", false);
+                        if (t == null) continue;
+                        _getSteamId = t.GetMethod("GetSteamID", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, null, Type.EmptyTypes, null);
+                        if (_getSteamId != null) { _steamIdField = _getSteamId.ReturnType.GetField("m_SteamID"); break; }
+                    }
+                }
+                if (_getSteamId != null && _steamIdField != null)
+                {
+                    object cs = _getSteamId.Invoke(null, null);
+                    ulong id = Convert.ToUInt64(_steamIdField.GetValue(cs));
+                    if (id > 0) return id.ToString();
+                }
             }
             catch (Exception) { }
             return PlaceholderSteamId;
