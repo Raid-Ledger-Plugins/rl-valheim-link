@@ -26,7 +26,7 @@ namespace RlValheimLink
 
         public static void Bind(ConfigFile cfg)
         {
-            BaseUrl = cfg.Bind("RaidLedger", "BaseUrl", "", "Server only. Raid Ledger base URL, e.g. https://raid.gamernight.net (no trailing slash). Empty = uploads off.");
+            BaseUrl = cfg.Bind("RaidLedger", "BaseUrl", "", "Server only. Your Raid Ledger instance's base URL (scheme + host, no trailing slash). Empty = uploads off.");
             ServerToken = cfg.Bind("RaidLedger", "ServerToken", "", "Server only. Per-server bearer token issued by Raid Ledger admin for THIS game server. Never logged.");
             ServerId = cfg.Bind("RaidLedger", "ServerId", "", "Server only. Raid Ledger's id for this game server, issued with the token; goes into every message.");
             MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items (ROK-1833). Change only to point at a mock on another path.");
