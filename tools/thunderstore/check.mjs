@@ -37,9 +37,14 @@ const cmp = (a, b) => { const x = parseVersion(a), y = parseVersion(b); for (let
 
 async function exists(ns, name, version) {
   const r = await fetch(`${API}/${ns}/${name}/${version}/`, { headers: HEADERS });
-  if (r.status === 404) return false;
-  if (!r.ok) throw new Error(`Thunderstore ${r.status} for ${ns}-${name}-${version}`);
-  return (await r.json()).version_number === version;
+  if (r.ok) return (await r.json()).version_number === version;
+  if (r.status !== 404) throw new Error(`Thunderstore ${r.status} for ${ns}-${name}-${version}`);
+  // The per-version route lags behind a fresh upload; the package route's `latest` does not.
+  const p = await fetch(`${API}/${ns}/${name}/`, { headers: HEADERS });
+  if (p.status === 404) return false;
+  if (!p.ok) throw new Error(`Thunderstore ${p.status} for ${ns}-${name}`);
+  const latest = (await p.json()).latest?.version_number;
+  return latest !== undefined && cmp(latest, version) >= 0;
 }
 
 const cfg = loadToml(resolve(root, 'thunderstore.toml'));
