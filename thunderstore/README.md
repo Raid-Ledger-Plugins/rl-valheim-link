@@ -18,8 +18,9 @@ leaves your PC except through the game server you are playing on.
 
 ## Server setup (operator)
 
-1. Install the same version on the **dedicated server** (`BepInEx/plugins/RlValheimLink/`, three DLLs).
-   The server rejects clients on a different mod version, so keep the server and the modpack in step.
+1. Install the mod on the **dedicated server** too (`BepInEx/plugins/RlValheimLink/`, three DLLs).
+   Server and clients need the same RPC protocol, not the same version: a server update never forces a
+   modpack update, and the server log says which client version joined.
 2. Start it once so `BepInEx/config/RaidLedger.ValheimLink.cfg` exists, then set under `[RaidLedger]`:
    - `BaseUrl` — your Raid Ledger instance (scheme + host, no trailing slash);
    - `ServerId` — the id Raid Ledger shows next to the token (the Pelican server id, as digits);

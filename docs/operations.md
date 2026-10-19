@@ -11,7 +11,7 @@ and the `RLVL:` lines in `BepInEx/LogOutput.log`.
 | Wrong `ServerId` | 403 → halted the same way | Fix the id (shown next to the token in the admin dialog) |
 | Raid Ledger instance rebuilt / URL or server id changed | The server detects the new target (URL + server id + token hash) at start and forgets its "already uploaded" markers: base map re-queued, items export re-requested; player snapshots re-send on the next save | Paste the new token if there is one, restart once |
 | Item catalogue missing on the site | It is produced by an admin client once per game version / mod set | Make sure an admin (`adminlist.txt`, `Steam_7656…`) joins; or set `[Server] ItemsExportBy = anyone` |
-| Player sends nothing | `[Client] OptOut = true`, mod not in their profile, or a different mod version than the server (`reject modVersion …` in their log) | Check their profile's pack version |
+| Player sends nothing | `[Client] OptOut = true`, mod not in their profile, or an older RPC protocol than the server (`reject protocol …` in their log; mod versions may differ) | Check their profile has the mod; update the pack if the protocol changed |
 | Rate limited (429) / Raid Ledger down (5xx) | Backoff with `Retry-After` / exponential up to 10 min, nothing lost (spooled) | Nothing |
 | Bad request (400 schema_invalid …) | The message is dropped and logged with the failing path | Report it: contract drift or a mod bug |
 | Storage quota full (413 quota_exceeded) | Waits 10 min and retries | Raise the quota or prune on the Raid Ledger side |

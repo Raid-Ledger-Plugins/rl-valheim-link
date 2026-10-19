@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 — 2026-10-19
+
+Bundled release after the first full in-game runs (operator ruling: fewer, better-tested iterations).
+
+- **Compatibility by protocol, not version.** The server accepts any client that speaks the same RPC
+  protocol and logs the client's mod version; a server-side update no longer forces a modpack update.
+  `Server.RequireExactModVersion = true` restores the strict check.
+- **Equipment & Quick Slots rows named through its official API** (`API.IsSlotCell`), so the extra
+  inventory rows arrive as `equipment` / `quickslot` instead of `other`.
+- **Progress lines** at 25/50/75% for large transfers (the icon atlas is ~6 MB and Steam sends it at
+  ~150 KB/s, about 40 s).
+- Includes 0.1.6: the logout flush sends only the small snapshots and leaves large transfers to a live
+  session.
+
 ## 0.1.6 — 2026-10-19
 
 - Fix: logging out while an item-catalogue export was queued lost everything, including the character and

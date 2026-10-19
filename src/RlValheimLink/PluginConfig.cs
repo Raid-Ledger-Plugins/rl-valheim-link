@@ -12,7 +12,7 @@ namespace RlValheimLink
         public static ConfigEntry<bool> UploadGzip;
         public static ConfigEntry<string> SpoolDirectory;
         // [Server]
-        public static ConfigEntry<bool> TrustClientSteamId;
+        public static ConfigEntry<bool> TrustClientSteamId, RequireExactModVersion;
         public static ConfigEntry<string> ItemsExportBy;
         // [BaseMap]
         public static ConfigEntry<bool> BaseMapEnabled;
@@ -40,6 +40,7 @@ namespace RlValheimLink
             SpoolDirectory = cfg.Bind("Upload", "SpoolDirectory", "", "Server only. Pending uploads + blob cache. Empty = <BepInEx>/RLValheimLink/spool.");
 
             TrustClientSteamId = cfg.Bind("Server", "TrustClientSteamId", false, "Server only. Accept the client's steamId claim when the peer's socket identity is not a SteamID64 (crossplay/PlayFab). Off = such peers are skipped.");
+            RequireExactModVersion = cfg.Bind("Server", "RequireExactModVersion", false, "Server only. Reject clients whose mod version differs from the server's. Off (default): any client speaking the same RPC protocol is accepted and its version is logged, so server-side updates never force a modpack update.");
             ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "admins", new ConfigDescription("Server only. Which clients may produce the items export when asked: admins | anyone | nobody.", new AcceptableValueList<string>("admins", "anyone", "nobody")));
 
             BaseMapEnabled = cfg.Bind("BaseMap", "Enabled", true, "Server only. Render the world's base map PNG once per (world, game version).");

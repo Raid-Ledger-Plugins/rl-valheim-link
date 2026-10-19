@@ -155,9 +155,13 @@ namespace RlValheimLink.Server
         {
             var hello = JObject.Parse(MessageJson.Utf8NoBom.GetString(payload));
             string gameVersion = (string)hello["gameVersion"], modSetHash = (string)hello["modSetHash"], modVersion = (string)hello["modVersion"];
-            PeerIdentity.RememberHello(sender, gameVersion, modSetHash);
-            Log.Info($"peer {sender}: hello mod={modVersion} game={gameVersion} modSet={modSetHash?.Substring(0, Math.Min(12, modSetHash.Length))}… steam={(facts.SteamId ?? "none")} admin={facts.IsAdmin}");
-            if (modVersion != Plugin.Version) { LinkChannel.SendControl(sender, "reject", $"modVersion {modVersion} != server {Plugin.Version}"); return; }
+            int protocol = hello["protocol"] is JValue pv && pv.Type == JTokenType.Integer ? (int)pv : -1;
+            PeerIdentity.RememberHello(sender, gameVersion, modSetHash, modVersion);
+            Log.Info($"peer {sender}: hello mod={modVersion} protocol={protocol} game={gameVersion} modSet={modSetHash?.Substring(0, Math.Min(12, modSetHash.Length))}… steam={(facts.SteamId ?? "none")} admin={facts.IsAdmin}");
+            // What must match is the RPC protocol (the chunk format and this hello); mod versions may differ.
+            if (protocol != LinkChannel.Protocol) { LinkChannel.SendControl(sender, "reject", $"protocol {protocol} != server {LinkChannel.Protocol}: update the mod"); return; }
+            if (PluginConfig.RequireExactModVersion.Value && modVersion != Plugin.Version) { LinkChannel.SendControl(sender, "reject", $"modVersion {modVersion} != server {Plugin.Version}"); return; }
+            if (modVersion != Plugin.Version) Log.Info($"peer {sender}: client mod {modVersion} differs from server {Plugin.Version}; same protocol, accepted");
             MaybeRequestItems(sender, facts, gameVersion, modSetHash);
         }
 
@@ -199,7 +203,7 @@ namespace RlValheimLink.Server
                 SocketSteamId = facts.SteamId,
                 TrustClientSteamId = PluginConfig.TrustClientSteamId.Value,
                 ZdoPlayerId = facts.PlayerId,
-                ServerModVersion = Plugin.Version,
+                ServerModVersion = PluginConfig.RequireExactModVersion.Value ? Plugin.Version : null,
                 NowUtc = DateTime.UtcNow,
                 BaseMap = _baseMap?.Ref,
             };

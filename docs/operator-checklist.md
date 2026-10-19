@@ -28,7 +28,7 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
    then, once your character has spawned:
    `RLVL: queued hello: transfer #1 Hello <n> bytes in 1 chunk(s)` and `RLVL: sent hello: transfer #1 complete`.
    Server log: `RLVL: received transfer #1 Hello from peer <uid>: <n> bytes` and
-   `RLVL: peer <uid>: hello mod=0.1.0 game=<version> modSet=<12 hex>… steam=<17 digits> admin=<True|False>`.
+   `RLVL: peer <uid>: hello mod=<client version> protocol=1 game=<version> modSet=<12 hex>… steam=<17 digits> admin=<True|False>`.
    If `steam=none`, the server could not read a SteamID64 from your connection (crossplay/PlayFab?) and
    will reject your data — paste the line and stop here.
    If you are in `adminlist.txt` (`Steam_7656…` format in Valheim 1.0; the mod also accepts the bare id):
