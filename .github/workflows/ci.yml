@@ -72,8 +72,11 @@ jobs:
           shipped=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- src thunderstore.toml thunderstore/README.md thunderstore/icon.png CHANGELOG.md LICENSE)
           if [ -z "$shipped" ]; then echo "No shipped files changed; no version bump needed."; exit 0; fi
           echo "Shipped files changed:"; echo "$shipped"
-          git show "origin/${{ github.base_ref }}:thunderstore.toml" > /tmp/base.toml
-          node tools/thunderstore/check.mjs bumped /tmp/base.toml
+          if git show "origin/${{ github.base_ref }}:thunderstore.toml" > /tmp/base.toml 2>/dev/null; then
+            node tools/thunderstore/check.mjs bumped /tmp/base.toml
+          else
+            echo "thunderstore.toml does not exist on ${{ github.base_ref }} yet; nothing to compare against"
+          fi
           if node tools/thunderstore/check.mjs published; then echo "::error::this version is already on Thunderstore"; exit 1; fi
       - name: Restore (game assemblies from NuGet)
         id: restore
