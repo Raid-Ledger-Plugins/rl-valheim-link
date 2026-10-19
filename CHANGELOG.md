@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.5 — 2026-10-19
+
+- The server notices when its upload target changed (Raid Ledger instance rebuilt or moved, server id or
+  token changed) and forgets its "already uploaded" markers, so the base map and the item catalogue are
+  re-sent without any manual step; dedupe watermarks and pending messages are kept.
+- Operator instructions: server setup, item catalogue by admins, token rotation and rebuilt-instance
+  behaviour on the Thunderstore page; `docs/operations.md` runbook.
+
 ## 0.1.4 — 2026-10-19
 
 - Fix: captures made on logout or quit were lost — the game saves the profile and closes the connection in

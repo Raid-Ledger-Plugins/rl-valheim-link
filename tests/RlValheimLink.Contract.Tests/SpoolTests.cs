@@ -30,6 +30,26 @@ public class SpoolTests : IDisposable
     }
 
     [Fact]
+    public void A_changed_upload_target_forgets_uploaded_markers_but_keeps_dedupe_and_pending()
+    {
+        var s = new Spool(_dir);
+        Assert.False(s.ResetIfTargetChanged("t1")); // first target: nothing to forget
+        var sha = new string('c', 64);
+        s.PutBlob(sha, new byte[] { 1 }, 1, 1, DateTime.UtcNow);
+        s.MarkBlobUploaded(sha);                                     // file deleted after upload
+        s.MarkItemsExport("1.0.20", "h", "2026-10-19T20:00:00Z");
+        s.Put("character", "character|a|1", "2026-10-19T20:00:00Z", new byte[] { 1 }, Array.Empty<string>(), DateTime.UtcNow);
+        s.MarkUploaded(s.Pending()[0]);
+        Assert.False(s.ResetIfTargetChanged("t1"));                 // same target: no-op
+        Assert.True(s.ResetIfTargetChanged("t2"));                  // rebuilt instance / new token
+        Assert.False(s.HasBlob(sha));                                // re-queued by the next render
+        Assert.False(s.HasItemsExport("1.0.20", "h"));               // re-requested at the next hello
+        Assert.Null(s.LastUploaded("character|a|1"));
+        Assert.Equal("2026-10-19T20:00:00Z", s.LastAccepted("character|a|1")); // dedupe watermark stays
+        Assert.False(new Spool(_dir).ResetIfTargetChanged("t2"));   // persisted
+    }
+
+    [Fact]
     public void Blobs_are_content_addressed_and_items_exports_are_remembered()
     {
         var s = new Spool(_dir);

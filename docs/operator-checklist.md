@@ -31,8 +31,9 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
    `RLVL: peer <uid>: hello mod=0.1.0 game=<version> modSet=<12 hex>… steam=<17 digits> admin=<True|False>`.
    If `steam=none`, the server could not read a SteamID64 from your connection (crossplay/PlayFab?) and
    will reject your data — paste the line and stop here.
-   If you are in `adminlist.txt`: `RLVL: peer <uid>: asking for the items export (game <version>, mod set …)`
-   follows, and your client starts the export of section D on its own.
+   If you are in `adminlist.txt` (`Steam_7656…` format in Valheim 1.0; the mod also accepts the bare id):
+   `RLVL: peer <uid>: asking for the items export (game <version>, mod set …)` follows, and your client
+   starts the export of section D on its own. `admin=False` with an empty adminlist is correct behaviour.
    Paste back: the `ZNet up` line from both sides and the hello lines.
 
 ## B. Character capture (client)
