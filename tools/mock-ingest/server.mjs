@@ -33,34 +33,97 @@ export const CAPTURED_AT_MAX_FUTURE_MS = 300_000;
 const bitmapBytes = (w, h) => Math.ceil((w * h) / 8);
 export const CONTAINER_ENTRIES_MAX = 50_000, RECIPE_ENTRIES_MAX = 12_000;
 const INT64_MIN = -(2n ** 63n), INT64_MAX = 2n ** 63n - 1n;
+const STEAMID64_MIN = 2n ** 56n + 2n ** 52n + 2n ** 32n; // first individual-account SteamID64
+const VANILLA_ROWS = 4;
 
-// Zod-only refinements of the containers and recipes kinds (valheim-link-containers.schema.ts,
-// valheim-link-recipes*.schema.ts at the pinned sha): schema.json cannot express them. Each
-// returns the issues Zod would raise, as {path, code}; empty = valid.
-const inInt64 = (v) => { const n = BigInt(v); return n >= INT64_MIN && n <= INT64_MAX; }; // schema.json already enforced the pattern
-function uniquePrefabs(list, at, issues) {
+// Zod-only refinements (packages/contract/src/valheim-link-*.schema.ts at the pinned sha) that
+// schema.json cannot express. `refine(msg)` returns the issues Zod would raise, as {path, code};
+// empty = valid. Runs only after schema.json passed, so every pattern already holds (BigInt is safe).
+const custom = (path) => ({ path, code: 'custom' });
+const inRange = (v, min, max) => { const n = BigInt(v); return n >= min && n <= max; };
+function int64(v, path, issues) { if (!inRange(v, INT64_MIN, INT64_MAX)) issues.push(custom(path)); }
+function steamId(v, path, issues) { if (!inRange(v, STEAMID64_MIN, INT64_MAX)) issues.push(custom(path)); }
+function unique(list, key, path, issues) {
   const seen = new Set();
-  list.forEach((r, i) => { if (seen.has(r.prefab)) issues.push({ path: `${at}.${i}.prefab`, code: 'custom' }); seen.add(r.prefab); });
+  list.forEach((v, i) => { const k = key(v); if (seen.has(k)) issues.push(custom(path(i))); seen.add(k); });
+}
+const uniquePrefabs = (list, at, issues) => unique(list, (r) => r.prefab, (i) => `${at}.${i}.prefab`, issues);
+function identity(ref, at, issues) {
+  steamId(ref.steamId, `${at}.steamId`, issues);
+  int64(ref.playerId, `${at}.playerId`, issues);
+  int64(ref.worldUid, `${at}.worldUid`, issues);
+}
+
+export function refineCharacter(msg) {
+  const issues = [];
+  identity(msg.character, 'character', issues);
+  const stack = (s, at) => { if ((s.durability === null) !== (s.maxDurability === null)) issues.push(custom(`${at}.maxDurability`)); };
+  msg.equipment.forEach((e, i) => stack(e.item, `equipment.${i}.item`));
+  const { grid, items } = msg.inventory;
+  const slots = new Set();
+  items.forEach((slot, i) => {
+    stack(slot.item, `inventory.items.${i}.item`);
+    const key = `${slot.x},${slot.y}`;
+    if (slot.x >= grid.width || slot.y >= grid.height) issues.push(custom(`inventory.items.${i}`));
+    else if (slots.has(key)) issues.push(custom(`inventory.items.${i}`));
+    slots.add(key);
+  });
+  // extraRows lists exactly the rows past the vanilla four: y in [4, height), unique, height − 4 of them.
+  const rows = new Set();
+  let bad = false;
+  grid.extraRows.forEach((row, i) => {
+    if (row.y < VANILLA_ROWS || row.y >= grid.height || rows.has(row.y)) { bad = true; issues.push(custom(`inventory.grid.extraRows.${i}`)); }
+    rows.add(row.y);
+  });
+  if (!bad && grid.extraRows.length !== Math.max(0, grid.height - VANILLA_ROWS)) issues.push(custom('inventory.grid.extraRows'));
+  unique(msg.equipment, (e) => e.slot, (i) => `equipment.${i}`, issues);
+  unique(msg.skills, (s) => s.id, (i) => `skills.${i}`, issues);
+  return issues;
+}
+
+export function refineMap(msg) {
+  const issues = [];
+  identity(msg.character, 'character', issues);
+  for (const name of ['explored', 'sharedExplored']) {
+    const bmp = msg[name];
+    if (!bmp) continue;
+    const raw = bitmapBytes(bmp.width, bmp.height);
+    const maxChars = 4 * Math.ceil((raw + Math.ceil(raw / 8) + Math.ceil(raw / 64) + 64) / 3); // valheimLinkBitmapMaxGzipBytes as base64
+    if (bmp.data.length % 4 !== 0) issues.push(custom(`${name}.data`));
+    if (bmp.data.length > maxChars) issues.push(custom(`${name}.data`));
+  }
+  // §6: bitmaps and base map are textureSize square.
+  const size = msg.grid.textureSize;
+  for (const name of ['explored', 'sharedExplored', 'baseMap'])
+    if (msg[name] && (msg[name].width !== size || msg[name].height !== size)) issues.push(custom(name));
+  return issues;
+}
+
+export function refineItems(msg) {
+  const issues = [];
+  uniquePrefabs(msg.items, 'items', issues);
+  msg.items.forEach((item, i) => {
+    const icon = item.icon;
+    if (icon?.kind !== 'atlas' || !msg.atlas) return;
+    if (icon.x + icon.w > msg.atlas.width || icon.y + icon.h > msg.atlas.height) issues.push(custom(`items.${i}.icon`));
+  });
+  if (!msg.atlas && msg.items.some((item) => item.icon?.kind === 'atlas')) issues.push(custom('atlas'));
+  return issues;
 }
 
 export function refineContainers(msg) {
   const issues = [];
-  if (!inInt64(msg.worldUid)) issues.push({ path: 'worldUid', code: 'custom' });
-  const seen = new Set();
-  let entries = 0;
+  int64(msg.worldUid, 'worldUid', issues);
   msg.containers.forEach((c, i) => {
     const at = `containers.${i}`;
-    if (!inInt64(c.creatorPlayerId)) issues.push({ path: `${at}.creatorPlayerId`, code: 'custom' });
-    if (c.creatorPlayerId === '0') issues.push({ path: `${at}.creatorPlayerId`, code: 'custom' });
-    if (c.usedSlots > c.slots) issues.push({ path: `${at}.usedSlots`, code: 'custom' });
-    if (c.unreadable && (c.items.length > 0 || c.usedSlots !== 0)) issues.push({ path: `${at}.items`, code: 'custom' });
-    const stacks = new Set();
-    c.items.forEach((s, j) => { const k = `${s.prefab}@${s.quality}`; if (stacks.has(k)) issues.push({ path: `${at}.items.${j}`, code: 'custom' }); stacks.add(k); });
-    const key = `${c.prefab}|${c.x}|${c.y}|${c.z}|${c.creatorPlayerId}`;
-    if (seen.has(key)) issues.push({ path: at, code: 'custom' });
-    seen.add(key);
-    entries += c.items.length;
+    int64(c.creatorPlayerId, `${at}.creatorPlayerId`, issues);
+    if (c.creatorPlayerId === '0') issues.push(custom(`${at}.creatorPlayerId`));
+    if (c.usedSlots > c.slots) issues.push(custom(`${at}.usedSlots`));
+    if (c.unreadable && (c.items.length > 0 || c.usedSlots !== 0)) issues.push(custom(`${at}.items`));
+    unique(c.items, (s) => `${s.prefab}@${s.quality}`, (j) => `${at}.items.${j}`, issues);
   });
+  unique(msg.containers, (c) => `${c.prefab}|${c.x}|${c.y}|${c.z}|${c.creatorPlayerId}`, (i) => `containers.${i}`, issues);
+  const entries = msg.containers.reduce((n, c) => n + c.items.length, 0);
   if (entries > CONTAINER_ENTRIES_MAX) issues.push({ path: 'containers', code: 'too_big' });
   return issues;
 }
@@ -73,25 +136,27 @@ export function refineRecipes(msg) {
   uniquePrefabs(msg.stations, 'stations', issues);
   uniquePrefabs(msg.pieces, 'pieces', issues);
   uniquePrefabs(msg.processors, 'processors', issues);
-  const ids = new Set();
-  msg.recipes.forEach((r, i) => { if (ids.has(r.id)) issues.push({ path: `recipes.${i}.id`, code: 'custom' }); ids.add(r.id); });
+  unique(msg.recipes, (r) => r.id, (i) => `recipes.${i}.id`, issues);
   const stations = new Set(msg.stations.map((s) => s.prefab));
   msg.recipes.forEach((r, i) => {
-    for (const field of ['station', 'repairStation']) if (r[field] !== null && !stations.has(r[field])) issues.push({ path: `recipes.${i}.${field}`, code: 'custom' });
+    for (const field of ['station', 'repairStation']) if (r[field] !== null && !stations.has(r[field])) issues.push(custom(`recipes.${i}.${field}`));
   });
-  msg.pieces.forEach((p, i) => { if (p.station !== null && !stations.has(p.station)) issues.push({ path: `pieces.${i}.station`, code: 'custom' }); });
+  msg.pieces.forEach((p, i) => { if (p.station !== null && !stations.has(p.station)) issues.push(custom(`pieces.${i}.station`)); });
   const processors = new Set(msg.processors.map((p) => p.prefab));
-  msg.processes.forEach((p, i) => { if (!processors.has(p.processor)) issues.push({ path: `processes.${i}.processor`, code: 'custom' }); });
+  msg.processes.forEach((p, i) => { if (!processors.has(p.processor)) issues.push(custom(`processes.${i}.processor`)); });
   for (const key of ['stations', 'pieces']) msg[key].forEach((item, i) => {
     const icon = item.icon;
     if (!icon) return;
-    if (!msg.atlas) issues.push({ path: 'atlas', code: 'custom' });
-    else if (icon.x + icon.w > msg.atlas.width || icon.y + icon.h > msg.atlas.height) issues.push({ path: `${key}.${i}.icon`, code: 'custom' });
+    if (!msg.atlas) issues.push(custom('atlas'));
+    else if (icon.x + icon.w > msg.atlas.width || icon.y + icon.h > msg.atlas.height) issues.push(custom(`${key}.${i}.icon`));
   });
   const entries = msg.recipes.reduce((n, r) => n + r.resources.length, 0) + msg.pieces.reduce((n, p) => n + p.resources.length, 0) + msg.processes.reduce((n, p) => n + p.inputs.length, 0);
   if (entries > RECIPE_ENTRIES_MAX) issues.push({ path: '', code: 'too_big' });
   return issues;
 }
+
+const REFINE = { character: refineCharacter, map: refineMap, items: refineItems, containers: refineContainers, recipes: refineRecipes };
+export const refine = (msg) => REFINE[msg.kind]?.(msg) ?? [];
 
 export function createMock(opts = {}) {
   const tokens = opts.tokens ?? { [process.env.RLVL_MOCK_TOKEN ?? 'mock-token']: process.env.RLVL_MOCK_SERVER_ID ?? 'srv_mock_01' };
@@ -185,23 +250,17 @@ export function createMock(opts = {}) {
       const issues = validate.errors.slice(0, 10).map((e) => ({ path: e.instancePath.replace(/^\//, '').replace(/\//g, '.'), code: e.keyword }));
       return fail(res, 400, 'schema_invalid', 'message does not match the contract', { issues });
     }
-    const refined = msg.kind === 'containers' ? refineContainers(msg) : msg.kind === 'recipes' ? refineRecipes(msg) : [];
+    const refined = refine(msg);
     if (refined.length) return fail(res, 400, 'schema_invalid', 'message does not match the contract', { issues: refined.slice(0, 10) });
     if (msg.kind !== routeKind) return fail(res, 400, 'kind_mismatch', 'body kind does not match the route');
     if (msg.serverId !== serverId) return fail(res, 403, 'server_mismatch', 'serverId does not match the token');
     const at = Date.parse(msg.capturedAt);
     if (!Number.isFinite(at)) return fail(res, 400, 'schema_invalid', 'capturedAt', { issues: [{ path: 'capturedAt', code: 'invalid_format' }] });
     if (at > now() + CAPTURED_AT_MAX_FUTURE_MS) return fail(res, 400, 'captured_at_in_future', 'capturedAt is ahead of the server');
-    if (msg.kind === 'map') {
-      // §6 refinements Zod enforces upstream but schema.json cannot: bitmaps and base map are textureSize square.
-      const size = msg.grid.textureSize;
-      for (const name of ['explored', 'sharedExplored', 'baseMap'])
-        if (msg[name] && (msg[name].width !== size || msg[name].height !== size)) return fail(res, 400, 'schema_invalid', `${name} must be ${size}x${size}`, { issues: [{ path: name, code: 'custom' }] });
-      for (const name of ['explored', 'sharedExplored']) {
-        if (!msg[name]) continue;
-        const problem = checkBitmap(msg[name], name);
-        if (problem) return fail(res, 400, 'bitmap_invalid', problem);
-      }
+    if (msg.kind === 'map') for (const name of ['explored', 'sharedExplored']) {
+      if (!msg[name]) continue;
+      const problem = checkBitmap(msg[name], name);
+      if (problem) return fail(res, 400, 'bitmap_invalid', problem);
     }
     const refs = blobRefs(msg);
     for (const ref of refs) {
