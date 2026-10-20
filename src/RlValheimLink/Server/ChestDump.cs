@@ -535,7 +535,7 @@ namespace RlValheimLink.Server
             foreach (var it in best.d.Items.Take(8))
                 Log.Info($"chestdump[{tag}]   item {ItemName(it)} x{it.m_stack} q{it.m_quality} v{it.m_variant} at ({it.m_gridPos.x},{it.m_gridPos.y}) worldLevel={it.m_worldLevel} cheated={F(it, "m_cheated")} shared={(it.m_shared != null ? it.m_shared.m_name : "null")}");
             if (best.d.Items.Count > 8) Log.Info($"chestdump[{tag}]   … {best.d.Items.Count - 8} more stacks");
-            Log.Info($"chestdump[{tag}] rows: prefab {p.Width}x{p.Height}, decoded maxRow={best.d.MaxRow}{(best.d.MaxRow >= p.Height ? " → BEYOND the prefab's rows" : "")}; header count {c} vs decoded {best.d.Items.Count}; live instance: {LiveInventory(zdo)}; vote {best.loader.Name}");
+            Log.Info($"chestdump[{tag}] rows: prefab {p.Width}x{p.Height}, decoded maxRow={best.d.MaxRow}{(best.d.MaxRow >= p.Height ? " → BEYOND the prefab's rows" : "")}; header count {NumItems(data)} vs decoded {best.d.Items.Count}; live instance: {LiveInventory(zdo)}; vote {best.loader.Name}");
             return most > 0 ? best.loader.Name : null;
         }
 
@@ -571,7 +571,8 @@ namespace RlValheimLink.Server
         }
 
         /// <summary>The stack count after the int32 version, as ZPackage.WriteNumItems writes it: one byte below 128,
-        /// else two bytes with the high bit set on the first. Read as an int32 it is garbage (2 stacks read 655360002).</summary>
+        /// else (n &gt;&gt; 8) | 0x80 then (byte)n (0.221.4 IL; same signatures in 1.0.20). Read as an int32 it is garbage
+        /// (2 stacks read 655360002).</summary>
         private static int NumItems(byte[] data) =>
             data.Length >= 5 ? ((data[4] & 0x80) != 0 ? (data.Length >= 6 ? ((data[4] & 0x7F) << 8) | data[5] : -1) : data[4]) : -1;
 

@@ -36,9 +36,9 @@ Key decisions, each argued below:
    (§1.3). The inventory format moved from version 106 (0.221.x) to **110** in
    1.0.20, and 1.0.20 adds world-load migrations for container storage, so the
    chest's data may now be a byte array rather than a base64 string, and under
-   a different key. **This is the biggest risk in the design.** A spike of
-   half a day to a day on the test server settles it before any capture code
-   is written (§7).
+   a different key. **Settled by the spike on 2026-10-20 (§0.1):** 1.0.20
+   stores it as bytes under `items`, and the game's temporary inventory
+   decodes it on a dedicated server without spawning item objects.
 3. **Only player-built containers count** (§1.4): the prefab is a buildable
    piece that carries a `Container` (derived at runtime, so modded chests are
    included) **and** the ZDO's `creator` is non-zero. Loot chests, tombstones,
@@ -75,6 +75,43 @@ Rough effort: mod ≈ 5.5–7 days including the spike; Raid Ledger ≈ 14.5–1
 days across contract, ingest, importer, read routes, the visibility rule,
 dashboard and planner (§6.2).
 
+### 0.1 Spike results (test server, 2026-10-20, PR 16 build v0.2.2-rc.2)
+
+Two dump runs, ten minutes apart, on the test world (19 800 ZDOs; one player
+built two wood chests and moved items between the runs). These replace the
+UNVERIFIED notes in §1 and §2 where they differ.
+
+| Question | Answer |
+|---|---|
+| Where a 1.0.20 chest keeps its inventory | **Bytes under `items`** (`ZDO.GetByteArray(ZDOVars.s_items)`), no string, nothing under `itemData` |
+| Package header | `int32 version = 110`, then the stack count as `ZPackage.WriteNumItems` writes it: **one byte below 128, else two bytes** (`(n >> 8) \| 0x80`, then `n & 0xFF`; read back by `ReadNumItems`). Taken from the 0.221.4 IL; 1.0.20 has the same signatures. Not an `int32`: the spike's "dropped" numbers came from reading it as one (fixed in 0.2.1) |
+| Decoder | `new Inventory(true)` + `Load(pkg, true)` (both public) decodes every stack and instantiates **no** item objects; 0.04–0.10 ms per stack. The sized `Inventory(w, h)` variants also work but create one GameObject per stack |
+| Dedicated server, no local player | Works; nothing threw |
+| Creator | `creator` = the placing character's `playerId` (the same id on both sides); `creatorIndex` = 0. The personal-chest rule stands. No personal chest was built, so `privacy: private` itself was only seen on the prefab (`piece_chest_private`) |
+| Residency | Every container ZDO was found with no player connected |
+| Freshness | Changes made by a connected client (ZDO owned by the client, data revision 28) were read live ten minutes later without a world save |
+| Duplicates from the iterator | 0, but this world needed only 2 calls per prefab; untested at scale |
+| Discovery cost | 64 container prefabs, **67 ms over 2 ticks, busiest tick 24 ms**, on a small world. One tick runs all 64 prefab passes, so a production world would stutter: the scanner must budget discovery (§1.1). Measured on production below |
+| Member visibility in 1.0.20 | Public: `GetAllZDOsWithPrefabIterative`, `ZDOMan.GetZDO`, `ZDO.GetByteArray`/`GetLong`/`GetPrefab`/`GetPosition`, `ZNetScene.GetPrefab`/`m_prefabs`, `Container.m_privacy`/`m_width`/`m_height`, `Inventory(bool)`, `Inventory.Load(ZPackage, bool)`, `GetAllItems`, `Piece.GetCreator`, `ZDOExtraData.GetData`. Private: `m_objectsBySector`, `m_objectsByID`, `ConvertContainers`, `Container.CheckAccess` |
+| Container prefabs | 64 carry a `Container`; **18 are buildable** (chests, barrel, wardrobe, grausten chest, buildable pots and the like), 7 are vehicles (cart, sled, ships), 1 is private |
+| Processing stations | Smelter ×9 (incl. `BatteringRam`, a siege tool, `piece_bathtub` with no conversions, and `piece_FrostKiln` with no input), CookingStation ×4 (incl. `piece_FrostFoundry`, fuel `FrozenFuel`), Fermenter ×1, Incinerator ×1; CraftingStation ×11 |
+| 1.0.20 upgrades | `UpgradeStation` is a crafting station with `m_upgrader = true`; 271 requirements carry `m_upgraderResource` (items such as `Upgrader1Armor`), and 28 recipes (gold gear) are `m_noCraftOnlyUpgrade`. 481 recipes in total |
+| Production world (0.2.1-rc.2, 2026-10-20) | 361 143 ZDOs, discovery one prefab pass per tick: 832 containers in **19.2 s over 576 ticks, busiest tick 1.3 ms** (up to 9 iterator calls per prefab, 0 duplicates). Decode: 111 player-built containers (4 on ships), 530 stacks in 68 ms wall over 3 ticks, busiest tick 1.6 ms, 0.004 ms per stack; header count and decoded count agree everywhere (`dropped=0 headerMismatch=0`). The dump's two single-frame diagnostic steps (prefab survey 70 ms, decoder probes 107 ms) are not part of the scanner |
+
+**Design changes that follow** (applied below):
+
+- Decode with `new Inventory(true)` + `Load(pkg, true)` from `GetByteArray(s_items)`;
+  the base64-string path stays as a fallback only. Dropped stacks =
+  header count (`ReadNumItems`) − decoded count.
+- Discovery is budgeted: one prefab pass per tick, or one pass over all
+  sectors through a `GameAccess` accessor for `m_objectsBySector` with a
+  sector budget per tick. Measured on production with 0.2.1: one prefab
+  pass per tick keeps the busiest tick at 1.3 ms, so that is the default and
+  the `m_objectsBySector` route is not needed.
+- The recipes export skips conversions with a null input or output
+  (`BatteringRam`, `piece_FrostKiln`, `piece_bathtub`) and carries two
+  additive fields: `stations[].upgrader` and `resources[].upgraderResource`.
+
 ## 1. Game side: enumerating containers on the dedicated server
 
 All member names below were read from the reference assemblies the repo already
@@ -95,9 +132,9 @@ decompiled is committed. Behaviour known only from 0.221.4 IL is marked
   `m_objectsBySector` (both private) at world load **(0.221.4 IL)**. 1.0.20
   adds chunked saving and loading (`GetSaveClonePerChunk`, `SaveChunks`,
   `Version.World.ChunkedSave` = 40; the 1.0.20 world version is
-  `CheatCleanSlate` = 42). That every ZDO is still resident after load is
-  **UNVERIFIED**; the spike includes a chest in an area no player has loaded
-  since the restart.
+  `CheatCleanSlate` = 42). Every ZDO is still resident after load: the spike and
+  0.2.1 found every container with no player connected (all 361 143 ZDOs
+  resident on production, §0.1).
 - The public way to find them is
   `ZDOMan.GetAllZDOsWithPrefabIterative(string prefab, List<ZDO> zdos, ref int index)`
   (public in 0.221.4, present in 1.0.20). It returns `true` once the whole
@@ -112,10 +149,14 @@ decompiled is committed. Behaviour known only from 0.221.4 IL is marked
   records `(ZDOID, prefab hash)`; decoding re-resolves each id with
   `ZDOMan.instance.GetZDO(id)` and skips it when it is gone or its prefab
   changed.
-- Cost: one pass over all ZDOs per container prefab (≈ 10–15 vanilla
-  prefabs), spread over a few hundred ticks. If the spike measures it as too
-  slow, a single pass over `m_objectsBySector` through a new `GameAccess`
-  accessor is the fallback (CI's `tools/visibility-check` covers it).
+- Cost: one pass over all ZDOs per container prefab. The spike found 64
+  container prefabs and measured 67 ms over 2 ticks with a 24 ms tick on a
+  19 800-ZDO world (§0.1), so discovery is budgeted: at most one prefab pass
+  per tick, or a single pass over `m_objectsBySector` (private; through a new
+  `GameAccess` accessor, which CI's `tools/visibility-check` covers) with a
+  sector budget per tick. On production (361 143 ZDOs) one prefab pass per
+  tick took 19.2 s over 576 ticks with a 1.3 ms busiest tick (§0.1), so the
+  per-prefab budget is the default.
 - Per ZDO (public): `GetPrefab()` (stable hash of the prefab name),
   `GetPosition()` (`Vector3`, world metres), `GetString(int)`,
   `GetByteArray(int)`, `GetLong(int)`.
@@ -124,33 +165,29 @@ decompiled is committed. Behaviour known only from 0.221.4 IL is marked
 
 | `ZDOVars` field | String hashed | Type | Meaning for us |
 |---|---|---|---|
-| `s_items` | `"items"` | string (0.221.4) | base64 of the `ZPackage` written by `Inventory.Save`: `Container.Save` → `zPackage.GetBase64()` → `GetZDO().Set(ZDOVars.s_items, base64)` **(0.221.4 IL)**; empty or absent = empty chest. 1.0.20 shape UNVERIFIED (below) |
+| `s_items` | `"items"` | string (0.221.4) | base64 of the `ZPackage` written by `Inventory.Save`: `Container.Save` → `zPackage.GetBase64()` → `GetZDO().Set(ZDOVars.s_items, base64)` **(0.221.4 IL)**; empty or absent = empty chest. **1.0.20: bytes** (`GetByteArray(s_items)`), verified by the spike (§0.1) |
 | `s_creator` | `"creator"` | long | the placing character's `playerId`, written by `Piece.SetCreator` on placement **(0.221.4 IL)**; **0 for anything not placed by a player** (world-gen locations, dungeons) |
 | `s_addedDefaultItems` | `"addedDefaultItems"` | bool | set on **any** container after its first owner `Awake` (default items added, possibly none); not a loot signal and not used |
 | `s_inUse` | `"InUse"` | int | 1 while someone has it open (vanilla). Not used: MultiUserChest changes ownership semantics (§1.6) |
 
-**Creator on 1.0.20 (UNVERIFIED).** 1.0.20 changes `Piece.SetCreator(long)`
-to `SetCreator(long uid, PlatformUserID platformUserID)` and adds
-`ZDOVars.s_creatorIndex` and `Piece.m_creatorPlatformUserIDIndex`. Whether
-`creator` still holds the character's `playerId`, which the personal-chest rule
-relies on, cannot be read from a stub. The spike logs `creator` and
-`creatorIndex` on a personal chest and compares `creator` with the placing
-character's `playerId` from its `character` message.
+**Creator on 1.0.20 (verified by the spike, §0.1).** 1.0.20 changes
+`Piece.SetCreator(long)` to `SetCreator(long uid, PlatformUserID platformUserID)`
+and adds `ZDOVars.s_creatorIndex` and `Piece.m_creatorPlatformUserIDIndex`.
+`creator` still holds the placing character's `playerId` (the same id as in its
+`character` message), so the personal-chest rule stands. Not yet seen: a chest
+with `privacy: private` built in a world (only the prefab was inspected).
 
-**1.0.20 storage may have moved (UNVERIFIED).** The 1.0.20 signatures add
+**1.0.20 storage (verified by the spike, §0.1).** The 1.0.20 signatures add
 world-load migrations next to the existing ones
 (`ZDOMan.ConvertContainers(List<ZDO>, Version.World)`,
 `ZDOMan.ConvertInventories(List<ZDOID>, Version.World, int)`,
 `ZDOMan.ConvertPrefabStrings(List<ZDO>)`, `GetConvertHash(int, string, int)`),
-a new `ZDOVars.s_itemData` key and `Version.Item.Smaller`, and drop the cached
-`m_lastDataString` that 0.221.4's `Container.Load` compared the `items` string
-against. (`ZDO.GetByteArray` / `Set(int, byte[])` are not new: they exist since
-world version 27.) Read together, a 1.0.20 chest may keep its inventory as a
-**byte array**, under `items` or under `itemData`. The scanner therefore tries,
-in order, `GetString(s_items)` as base64, `GetByteArray(s_items)`,
-`GetByteArray(s_itemData)`. The spike lists every key present on one known
-chest (`ZDOExtraData.GetData(ZDOID, out …)` in 1.0.20, through `GameAccess`
-if it turns out not to be public) and settles which one is real.
+a new `ZDOVars.s_itemData` key and `Version.Item.Smaller`. On 1.0.20 a chest
+keeps its inventory as a **byte array under `items`**; no chest had a string
+or anything under `itemData` (test world, and 102 of 111 containers on the
+production world; the other 9 had no data, i.e. empty). The scanner tries, in
+order, `GetByteArray(s_items)`, then `GetString(s_items)` as base64 (a chest
+not yet migrated from an older world), then `GetByteArray(s_itemData)`.
 
 ### 1.3 Inventory serialisation and decoding
 
@@ -187,13 +224,12 @@ layouts from a stub.
 **Decision:** do not parse the package ourselves. Sketch:
 
 ```
-// scratch inventories cached per size; at least the prefab's width and 64 rows (1.0.20 rows can grow, below)
-var inv = Scratch(w, Math.Max(h, 64));
-var pkg = zdo.GetString(ZDOVars.s_items) is var b64 && b64.Length > 0 ? new ZPackage(b64)   // 0.221.x shape
-        : zdo.GetByteArray(ZDOVars.s_items)    is { } a ? new ZPackage(a)                      // 1.0.x candidates (§1.2)
-        : zdo.GetByteArray(ZDOVars.s_itemData) is { } d ? new ZPackage(d) : null;
-if (pkg != null) inv.Load(pkg);                     // public; the game's own decoder
-foreach (var it in inv.GetAllItems()) …             // public; m_dropPrefab.name, m_stack, m_quality
+// verified on 1.0.20 by the spike (§0.1): bytes under "items", temporary inventory, no item objects
+var inv = new Inventory(true);                       // public; temporary inventory
+var pkg = zdo.GetByteArray(ZDOVars.s_items) is { } a ? new ZPackage(a)                           // 1.0.20
+        : zdo.GetString(ZDOVars.s_items) is var b64 && b64.Length > 0 ? new ZPackage(b64) : null; // older worlds
+if (pkg != null) inv.Load(pkg, true);                // public
+foreach (var it in inv.GetAllItems()) …              // public; m_dropPrefab.name, m_stack, m_quality
 ```
 
 `w`/`h` come from the prefab: `ZNetScene.instance.GetPrefab(hash)` →
@@ -214,18 +250,17 @@ What `Inventory.Load` does **(0.221.4 IL)**, and what the design does about it:
   1.0.20's `Container.UpdateRows()` and `Inventory.SetHeight(int)` suggest a
   chest's live row count can exceed the prefab's.
 - It resolves items through `ObjectDB.instance.GetItemPrefab` and skips an
-  unknown prefab (a removed mod) with its own log line. If the spike confirms
-  the 1.0.20 package still starts with (version, count), the scan reports
-  `dropped = count − GetAllItems().Count` per scan; otherwise it reports only
-  decoded stacks.
+  unknown prefab (a removed mod) with its own log line. The 1.0.20 package
+  starts with (int32 version, `ReadNumItems` count) (§0.1), so the scan
+  reports `dropped = count − GetAllItems().Count` per scan.
 
-**UNVERIFIED for 1.0.20, checked by the spike:** which data shape and which
-`Load` overload decode a 1.0.20 chest; that it works on a dedicated server
-without a local player (1.0.20's cheat bookkeeping might touch
-`Player.m_localPlayer`); whether a chest's row count varies at runtime (then
-`slots` comes from the live rule, not the prefab); that the public signatures
-above are public in the real assembly (`visibility-check` only reports members
-it cannot find in the lagging CoffeeNova copy).
+**Verified for 1.0.20 by the spike and 0.2.1 (§0.1):** the data shape (bytes
+under `items`), the decoder (`new Inventory(true)` + `Load(pkg, true)`, no item
+objects), that it runs on a dedicated server without a local player, and that
+the signatures above are public in the real assembly. **Still open:** whether a
+chest's live row count can exceed the prefab's. No decoded chest has had a row
+beyond its prefab (`rowsBeyondPrefab=0` on the test and production worlds), so
+`slots` comes from the prefab until one does.
 
 ### 1.4 Which containers count (player-built only)
 
@@ -261,7 +296,7 @@ Privacy per container is read from the prefab, not the ZDO: `Container.m_privacy
 `ZNetScene.instance.GetPrefab(zdo.GetPrefab())`. Vanilla `piece_chest_private`
 is `Private`: only its creator may open it (`Container.CheckAccess`, private,
 compares `Piece.GetCreator()` with the opener's player id, **0.221.4 IL**;
-1.0.20 creator semantics UNVERIFIED, §1.2). `Group` returns `false` there in
+1.0.20 `creator` still holds the placing `playerId`, §1.2). `Group` returns `false` there in
 0.221.4 (no vanilla group chests); the message passes it through and Raid
 Ledger treats it as shared. Chests that check a ward (`m_checkGuardStone`) are
 unaffected: wards gate opening, not what the server can read.
@@ -337,10 +372,11 @@ signal under this mod, which is why we never read it.
   returns 0), so no RPC protocol bump is needed.
 - **Spike trigger:** the spike build (PR 16) runs the dump two minutes after
   every start, on by default (`[Chests] Dump`); nothing to configure, no RPC.
-- **Budget:** per tick, at most one `GetAllZDOsWithPrefabIterative` call per
-  prefab while discovering, then decoding up to `Chests.StacksPerTick`
-  (default 200) stacks; the spike measures milliseconds per stack and sets the
-  default.
+- **Budget:** per tick, at most **one** `GetAllZDOsWithPrefabIterative` call in
+  total while discovering (one prefab at a time; on production the busiest tick
+  was 1.3 ms, §0.1), then decoding up to `Chests.StacksPerTick` (default 200)
+  stacks. Decoding measured 0.004 ms per stack on production, so 200 stacks
+  stay well under a millisecond.
 - **Failures:** each chest decodes inside its own `try`; a chest that throws
   is still sent, with `unreadable: true` and no items (§1.8), so it stays
   under its own privacy. The "scan running" flag is cleared in a `finally`, so
@@ -406,8 +442,10 @@ distinct (prefab, quality), about 45 bytes each
 
 Well inside the 10 MiB body cap proposed in §4 and the 10 MiB nginx limit
 (ROK-1850). At six messages an hour that is at most ~0.5 MB of upload per hour.
-The scan holds one chest's decoded items at a time (the item GameObjects that
-`Inventory.Load` creates live until the end of the frame).
+The scan holds one chest's decoded items at a time. The temporary inventory
+(`new Inventory(true)`) creates no item GameObjects (§0.1); only the sized
+`Inventory(w, h)` variants would, one per stack, living until the end of the
+frame.
 
 ## 2. Recipe catalogue (for the crafting planner)
 
@@ -466,11 +504,13 @@ marked.
   copy counting only when the extension has `m_stack` **(0.221.4 IL)**. The
   export computes 1 + the number of distinct extension prefabs, capped at 20,
   and flags a station with a stackable extension.
-- **1.0.20 upgrade stations (UNVERIFIED):** 1.0.20 adds
-  `CraftingStation.m_upgrader`, `m_canRepair`, `m_hasCraftTab`, which together
-  with `Requirement.m_upgraderResource` and `Recipe.m_noCraftOnlyUpgrade`
-  suggest upgrades can happen at a different station. The spike logs their
-  values; they are exported (additively) once understood.
+- **1.0.20 upgrade stations (seen by the spike, §0.1):** 1.0.20 adds
+  `CraftingStation.m_upgrader`, `m_canRepair`, `m_hasCraftTab`.
+  `UpgradeStation` is the one station with `m_upgrader = true`; 271
+  requirements carry `Requirement.m_upgraderResource` (upgrade items such as
+  `Upgrader1Armor`) and 28 gold-gear recipes are `Recipe.m_noCraftOnlyUpgrade`.
+  Exported additively as `stations[].upgrader` and
+  `resources[].upgraderResource` (§5).
 - **Processing steps (in the first story, operator ruling).** What the planner
   needs to expand Bronze → Copper + Tin → Copper ore + Tin ore + Coal, or
   Mead → Mead base (fermenter) → cauldron ingredients. Found by walking the
@@ -780,7 +820,11 @@ c.privacy = 'private' AND (
 - No virtualisation library exists in the web app. ~1 000 catalogue rows render
   fine without one; adding one would be a "New pattern" line in the PR.
 
-## 4. Linear story draft — contract: `containers` kind
+## 4. Linear story draft — contract: `containers` kind (filed as ROK-1853)
+
+**Shipped** in Raid Ledger `c7914ec` (2026-10-20), pinned in mod 0.2.2 (at `cef3748`): CONTRACT.md §5a is
+now the source of truth for the field table, caps and refinements; this draft is kept for the
+reasoning. The mod 0.2.2 validator knows the kind; nothing sends it until the chest scanner ships.
 
 **Title:** Valheim Link contract v1 (additive): `containers` message — chest
 contents per world
@@ -861,7 +905,12 @@ read routes are a separate story (§6.1).
 accepted by the ingest integration spec; a second message with an older
 `capturedAt` is `stale`.
 
-## 5. Linear story draft — contract: `recipes` kind
+## 5. Linear story draft — contract: `recipes` kind (filed as ROK-1854, with the planner)
+
+**Shipped** in Raid Ledger `cef3748` (2026-10-20), pinned in mod 0.2.2: CONTRACT.md §5b is now
+the source of truth (raw requirement fields, atlas-only icons, `stations[].upgrader` and
+`resources[].upgraderResource` optional); this draft is kept for the reasoning. The mod 0.2.2
+validator knows the kind; nothing sends it until the recipes export ships.
 
 **Title:** Valheim Link contract v1 (additive): `recipes` message — crafting
 recipes, build pieces, stations and processing steps
@@ -885,7 +934,7 @@ every number bounded):
 | `kind` | `"recipes"` | |
 | `locale` | as in `items` | language of piece and station names |
 | `atlas` | binary ref \| `null` | piece and station icons; required when any icon is an atlas icon |
-| `stations[]` | ≤ 256 | `{ prefab, name 1–96, maxLevel 1–20, stackableExtension: boolean, icon }`, `prefab` unique |
+| `stations[]` | ≤ 256 | `{ prefab, name 1–96, maxLevel 1–20, stackableExtension: boolean, upgrader: boolean, icon }`, `prefab` unique; `upgrader` = `CraftingStation.m_upgrader` (1.0.20 `UpgradeStation`) |
 | `recipes[]` | ≤ 4 096 | see below, `id` unique |
 | `recipes[].id` | `^[A-Za-z0-9_.-]{1,96}$` | the Recipe asset name; when it does not match, the mod sends `<result>.<n>` with `<result>` shortened so the id stays ≤ 96 characters |
 | `recipes[].result` | prefab id | item crafted; name/icon from the `items` catalogue |
@@ -897,7 +946,7 @@ every number bounded):
 | `recipes[].anyOneOf` | boolean | `m_requireOnlyOneIngredient`: resources are alternatives |
 | `recipes[].qualityResultAmountMultiplier` | number 0–100 | only meaningful with `anyOneOf` |
 | `recipes[].formula` | `"vanilla"` \| `"custom"` | `custom` when the live per-quality amounts, station levels or stations differ from the documented formula |
-| `recipes[].resources[]` | ≤ 16 | `{ prefab, amount 0–10 000, amountPerLevel 0–10 000, extraAmountOnlyOneIngredient 0–10 000, recover: boolean }`, `prefab` unique |
+| `recipes[].resources[]` | ≤ 16 | `{ prefab, amount 0–10 000, amountPerLevel 0–10 000, extraAmountOnlyOneIngredient 0–10 000, recover: boolean, upgraderResource: boolean }`, `prefab` unique; `upgraderResource` = `Piece.Requirement.m_upgraderResource` (1.0.20 upgrade items such as `Upgrader1Armor`) |
 | `pieces[]` | ≤ 4 096 | `{ prefab, name 1–96, category (identifier ≤ 48, open set, `Piece.m_category`), tool (prefab id), station (prefab id \| null), icon, resources[] ≤ 16 of { prefab, amount 0–10 000, recover: boolean } }`, `prefab` unique |
 | `processors[]` | ≤ 256 | processing stations, `prefab` unique; name and icon come from `pieces[]` when the station is buildable |
 | `processors[].prefab` | prefab id | the station prefab (`smelter`, `fermenter`, …) |
@@ -940,7 +989,9 @@ is ~201 B, a piece resource ~141 B). With atlas-only icons the headers come to
 resources, so 12 000 leaves about 2.5× headroom. The largest-message spec from
 §4 confirms the exact figure; if it lands over, the alternative is a 16 MiB
 cap with gzip mandatory for this kind (nginx's 10 MiB limit applies to the
-compressed body).
+compressed body). Ruled 2026-10-20 (§8 item 16): per-array caps plus the
+largest-message CI test; mandatory gzip only if the measured worst case still
+exceeds the cap.
 
 **Changes:** as §4 (Zod schema, union, kind enum, cap constant, `schema.json`
 and its refinement description, fixtures, CONTRACT §1/§2/artifact table/new
@@ -1099,20 +1150,27 @@ the default unless overruled):
     next material spend", which may mean one shared list per server; that is a
     small extra story (a table and two routes).
 
-For the Raid Ledger lead:
+Raid Ledger lead items, **ruled by the operator 2026-10-20** (relayed by the
+Raid Ledger Lead; stories filed in Backlog, related to ROK-1829/1833/1835):
 
-15. Agree that a new `kind` is **additive under CONTRACT §9's closed-enum
-    rule**?
-16. Caps: total-entry refinements (`containers` ≤ 50 000 entries, `recipes` ≤
-    12 000 resources and process inputs with atlas-only piece icons) versus
-    tighter per-array caps or a 16 MiB `recipes` cap with mandatory gzip.
-17. **`items` is over its own cap today:** since the optional `file` icon
-    `blob` was added, a maximal schema-valid `items` message measures ≈ 11.05
-    MB against `VALHEIM_LINK_ITEMS_MAX_BYTES` = 10 485 760 (CONTRACT §7). Raise
-    the cap or trim a field; the largest-message spec (§4) would catch it.
-18. Recipes: raw requirement fields + documented formula (proposed) versus
-    precomputed per-quality tables.
-19. History: v1 keeps only the latest snapshot. A "wood over time" chart needs a
-    history table on the importer side; in or out of the first dashboard?
-20. The new read routes add a hidden-hub check that the existing armory routes
-    lack (§3.2). Apply it to the existing routes too, in a separate story?
+15. **A new message `kind` is additive** and stays v1 under CONTRACT §9. The
+    mod sends `containers` / `recipes` only after Raid Ledger ships the
+    contract and ingest for that kind and the mod re-pins.
+16. **Per-array caps** (e.g. `containers` ≤ 50 000 entries) **plus a contract
+    CI test per kind** that builds the largest schema-valid message and
+    asserts it fits its byte cap. Mandatory gzip for `recipes` only if the
+    measured worst case still exceeds its cap.
+17. **Real bug, ROK-1855 (High):** raise `VALHEIM_LINK_ITEMS_MAX_BYTES` to
+    12 MiB (an additive relaxation) after reproducing the 11.05 MB figure with
+    the new largest-message test; CONTRACT §7 updated in the same PR. The mod
+    re-pins after it ships. **Shipped** (Raid Ledger `c6e45bf`, 2026-10-20;
+    pinned in mod 0.2.2).
+18. **`recipes` carries raw requirement fields** plus a documented
+    per-quality formula; Raid Ledger computes per-quality amounts.
+19. **No history in the first dashboard**: latest snapshot only.
+20. **Separate story ROK-1856**: the existing armory read routes get the
+    hidden-hub check.
+
+Stories: ROK-1853 `containers` (with visibility rulings 1–6, to be confirmed
+in its spec), ROK-1854 `recipes` + planner, ROK-1855 `items` cap, ROK-1856
+hidden-hub check on armory routes.

@@ -26,20 +26,20 @@ namespace RlValheimLink.Contract
     /// </summary>
     public static class Validator
     {
-        private static readonly Regex ServerId = new Regex("^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex GameVersion = new Regex(@"^\d{1,4}(\.\d{1,5}){1,3}$", RegexOptions.CultureInvariant);
-        private static readonly Regex SemVer = new Regex(@"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$", RegexOptions.CultureInvariant);
-        private static readonly Regex IsoDateTime = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z$", RegexOptions.CultureInvariant);
-        private static readonly Regex SteamId = new Regex(@"^[1-9]\d{16}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Int64 = new Regex(@"^(0|-?[1-9]\d{0,18})$", RegexOptions.CultureInvariant);
-        private static readonly Regex Prefab = new Regex("^[A-Za-z0-9_.-]{1,96}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Sha256 = new Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex SkillId = new Regex("^-?[A-Za-z0-9_]{1,64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex PinType = new Regex("^[A-Za-z0-9_]{1,32}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Category = new Regex("^[A-Za-z0-9_]{1,48}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Locale = new Regex("^[A-Za-z_-]{2,32}$", RegexOptions.CultureInvariant);
-        private static readonly Regex IconFile = new Regex(@"^[A-Za-z0-9_.-]{1,100}\.png$", RegexOptions.CultureInvariant);
-        private static readonly Regex BitmapData = new Regex("^H4sI[A-Za-z0-9+/]*={0,2}$", RegexOptions.CultureInvariant);
+        private static readonly Regex ServerId = new Regex(@"^[A-Za-z0-9_-]{1,64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex GameVersion = new Regex(@"^\d{1,4}(\.\d{1,5}){1,3}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SemVer = new Regex(@"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z", RegexOptions.CultureInvariant);
+        private static readonly Regex IsoDateTime = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SteamId = new Regex(@"^[1-9]\d{16}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Int64 = new Regex(@"^(0|-?[1-9]\d{0,18})\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Prefab = new Regex(@"^[A-Za-z0-9_.-]{1,96}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Sha256 = new Regex(@"^[0-9a-f]{64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SkillId = new Regex(@"^-?[A-Za-z0-9_]{1,64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex PinType = new Regex(@"^[A-Za-z0-9_]{1,32}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Category = new Regex(@"^[A-Za-z0-9_]{1,48}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Locale = new Regex(@"^[A-Za-z_-]{2,32}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex IconFile = new Regex(@"^[A-Za-z0-9_.-]{1,100}\.png\z", RegexOptions.CultureInvariant);
+        private static readonly Regex BitmapData = new Regex(@"^H4sI[A-Za-z0-9+/]*={0,2}\z", RegexOptions.CultureInvariant);
 
         private static readonly BigInteger SteamMin = BigInteger.Parse(Caps.SteamId64Min, CultureInfo.InvariantCulture);
         private static readonly BigInteger I64Min = BigInteger.Parse(Caps.Int64Min, CultureInfo.InvariantCulture);
@@ -60,9 +60,9 @@ namespace RlValheimLink.Contract
             if (obj == null) { issues.Add(new ValidationIssue("", "invalid_type", "message must be an object")); return issues; }
 
             string kind = (obj["kind"] as JValue)?.Type == JTokenType.String ? (string)obj["kind"] : null;
-            if (kind != "character" && kind != "map" && kind != "items")
+            if (kind != "character" && kind != "map" && kind != "items" && kind != "containers" && kind != "recipes")
             {
-                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map or items"));
+                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map, items, containers or recipes"));
                 return issues;
             }
 
@@ -71,6 +71,8 @@ namespace RlValheimLink.Contract
                 case "character": Character(obj, issues); break;
                 case "map": Map(obj, issues); break;
                 case "items": Items(obj, issues); break;
+                case "containers": Containers(obj, issues); break;
+                case "recipes": Recipes(obj, issues); break;
             }
             return issues;
         }
@@ -82,18 +84,16 @@ namespace RlValheimLink.Contract
         private static void Header(JObject o, List<ValidationIssue> issues)
         {
             var sv = o["schemaVersion"];
-            if (sv == null || sv.Type != JTokenType.Integer && sv.Type != JTokenType.Float)
-                issues.Add(new ValidationIssue("schemaVersion", "invalid_type", "expected number"));
-            else if ((double)sv != Caps.SchemaVersion)
+            if (sv == null || sv.Type != JTokenType.Integer && sv.Type != JTokenType.Float || (double)sv != Caps.SchemaVersion)
                 issues.Add(new ValidationIssue("schemaVersion", "invalid_value", "schemaVersion must be 1"));
 
-            Str(o, "serverId", "", issues, 1, 64, ServerId);
+            Str(o, "serverId", "", issues, 0, null, ServerId);
             if (Str(o, "capturedAt", "", issues, 1, null, null, out string ts))
             {
                 if (!IsoDateTime.IsMatch(ts)) issues.Add(new ValidationIssue("capturedAt", "invalid_format", "ISO-8601 UTC with Z"));
                 if (ts.Length > Caps.TimestampMaxChars) issues.Add(new ValidationIssue("capturedAt", "too_big", "at most 3 fractional digits"));
             }
-            Str(o, "gameVersion", "", issues, 1, null, GameVersion);
+            Str(o, "gameVersion", "", issues, 0, null, GameVersion);
             if (Str(o, "modVersion", "", issues, 1, null, null, out string mv))
             {
                 if (mv.Length > 64) issues.Add(new ValidationIssue("modVersion", "too_big", "at most 64 chars"));
@@ -199,7 +199,7 @@ namespace RlValheimLink.Contract
                     string p = "skills." + i;
                     if (!ObjAt(skills[i], p, issues, out JObject s)) continue;
                     Keys(s, p, issues, "id", "level", "accumulator");
-                    if (Str(s, "id", p, issues, 1, null, SkillId, out string id))
+                    if (Str(s, "id", p, issues, 0, null, SkillId, out string id))
                         if (!seen.Add(id)) issues.Add(new ValidationIssue(p, "custom", "duplicate skills entry"));
                     Num(s, "level", p, issues, 0, 100);
                     Num(s, "accumulator", p, issues, 0, 1_000_000);
@@ -214,7 +214,7 @@ namespace RlValheimLink.Contract
         private static void ItemStack(JObject item, string path, List<ValidationIssue> issues)
         {
             Keys(item, path, issues, "prefab", "stack", "quality", "variant", "durability", "maxDurability");
-            Str(item, "prefab", path, issues, 1, 96, Prefab);
+            Str(item, "prefab", path, issues, 0, null, Prefab);
             Int(item, "stack", path, issues, 1, 100_000, out _);
             Int(item, "quality", path, issues, 1, 10, out _);
             Int(item, "variant", path, issues, 0, 63, out _);
@@ -262,7 +262,7 @@ namespace RlValheimLink.Contract
                     string p = "pins." + i;
                     if (!ObjAt(pins[i], p, issues, out JObject pin)) continue;
                     Keys(pin, p, issues, "type", "label", "x", "z", "checked", "shared");
-                    Str(pin, "type", p, issues, 1, 32, PinType);
+                    Str(pin, "type", p, issues, 0, null, PinType);
                     Str(pin, "label", p, issues, 0, 64, null);
                     Num(pin, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
                     Num(pin, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
@@ -283,8 +283,7 @@ namespace RlValheimLink.Contract
         private static void Bitmap(JObject b, string path, List<ValidationIssue> issues, int textureSize)
         {
             Keys(b, path, issues, "encoding", "width", "height", "data");
-            if (Str(b, "encoding", path, issues, 1, null, null, out string enc) && enc != ExploredBitmap.EncodingName)
-                issues.Add(new ValidationIssue(path + ".encoding", "invalid_value", "encoding must be " + ExploredBitmap.EncodingName));
+            Literal(b, "encoding", path, issues, ExploredBitmap.EncodingName);
             bool wOk = Int(b, "width", path, issues, Caps.BitmapEdgeMin, Caps.BitmapEdgeMax, out int w);
             bool hOk = Int(b, "height", path, issues, Caps.BitmapEdgeMin, Caps.BitmapEdgeMax, out int h);
             if (Str(b, "data", path, issues, 0, null, null, out string data))
@@ -304,10 +303,9 @@ namespace RlValheimLink.Contract
         private static bool BinaryRef(JObject b, string path, List<ValidationIssue> issues, out int w, out int h)
         {
             Keys(b, path, issues, "sha256", "byteLength", "contentType", "width", "height");
-            Str(b, "sha256", path, issues, 1, null, Sha256);
+            Str(b, "sha256", path, issues, 0, null, Sha256);
             Int(b, "byteLength", path, issues, 1, Caps.BinaryMaxBytes, out _);
-            if (Str(b, "contentType", path, issues, 1, null, null, out string ct) && ct != "image/png")
-                issues.Add(new ValidationIssue(path + ".contentType", "invalid_value", "contentType must be image/png"));
+            Literal(b, "contentType", path, issues, "image/png");
             bool wOk = Int(b, "width", path, issues, 1, Caps.BinaryEdgeMax, out w);
             bool hOk = Int(b, "height", path, issues, 1, Caps.BinaryEdgeMax, out h);
             return wOk && hOk;
@@ -317,7 +315,7 @@ namespace RlValheimLink.Contract
         {
             Keys(o, "", issues, HeaderKeys, "locale", "atlas", "items");
             Header(o, issues);
-            Str(o, "locale", "", issues, 2, 32, Locale);
+            Str(o, "locale", "", issues, 0, null, Locale);
 
             bool hasAtlas = false; int aw = 0, ah = 0;
             var atlas = o["atlas"];
@@ -336,10 +334,10 @@ namespace RlValheimLink.Contract
                     string p = "items." + i;
                     if (!ObjAt(items[i], p, issues, out JObject it)) continue;
                     Keys(it, p, issues, "prefab", "name", "category", "maxStack", "maxQuality", "variants", "icon");
-                    if (Str(it, "prefab", p, issues, 1, 96, Prefab, out string prefab))
+                    if (Str(it, "prefab", p, issues, 0, null, Prefab, out string prefab))
                         if (!seen.Add(prefab)) issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate prefab"));
                     Str(it, "name", p, issues, 1, 96, null);
-                    Str(it, "category", p, issues, 1, 48, Category);
+                    Str(it, "category", p, issues, 0, null, Category);
                     Int(it, "maxStack", p, issues, 1, 100_000, out _);
                     Int(it, "maxQuality", p, issues, 1, 10, out _);
                     Int(it, "variants", p, issues, 0, 64, out _);
@@ -364,7 +362,7 @@ namespace RlValheimLink.Contract
                     else if (ik == "file")
                     {
                         Keys(ic, ip, issues, "kind", "file", "blob");
-                        Str(ic, "file", ip, issues, 5, 104, IconFile);
+                        Str(ic, "file", ip, issues, 0, null, IconFile);
                         var blob = ic["blob"];
                         if (blob != null && ObjAt(blob, ip + ".blob", issues, out JObject bl)) BinaryRef(bl, ip + ".blob", issues, out _, out _);
                     }
@@ -374,6 +372,273 @@ namespace RlValheimLink.Contract
             if (atlas != null && atlas.Type == JTokenType.Null && anyAtlasIcon)
                 issues.Add(new ValidationIssue("atlas", "custom", "atlas icon without an atlas"));
         }
+
+        private static readonly string[] ContainerPrivacy = { "public", "private", "group" };
+
+        private static void Containers(JObject o, List<ValidationIssue> issues)
+        {
+            Keys(o, "", issues, HeaderKeys, "worldUid", "containers", "omittedShared", "omittedPrivate");
+            Header(o, issues);
+            Int64Str(o, "worldUid", "", issues);
+
+            if (Arr(o, "containers", "", issues, 0, Caps.ContainersMax, out JArray containers))
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                int entries = 0;
+                for (int i = 0; i < containers.Count; i++)
+                {
+                    string p = "containers." + i;
+                    if (!ObjAt(containers[i], p, issues, out JObject c)) continue;
+                    Keys(c, p, issues, "prefab", "x", "y", "z", "creatorPlayerId", "privacy", "vehicle", "slots", "usedSlots", "unreadable", "omittedEntries", "items");
+                    bool prefabOk = Str(c, "prefab", p, issues, 0, null, Prefab, out string prefab);
+                    bool xOk = Num(c, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double x);
+                    bool yOk = Num(c, "y", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double y);
+                    bool zOk = Num(c, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double z);
+                    bool creatorOk = Int64Str(c, "creatorPlayerId", p, issues, out string creator);
+                    if (creatorOk && creator == "0") { issues.Add(new ValidationIssue(p + ".creatorPlayerId", "custom", "creatorPlayerId must not be 0")); creatorOk = false; }
+                    Enum(c, "privacy", p, issues, ContainerPrivacy, out _);
+                    Bool(c, "vehicle", p, issues);
+                    bool slotsOk = Int(c, "slots", p, issues, 1, Caps.ContainerSlotsMax, out int slots);
+                    bool usedOk = Int(c, "usedSlots", p, issues, 0, Caps.ContainerSlotsMax, out int used);
+                    bool unreadableOk = Bool(c, "unreadable", p, issues, out bool unreadable);
+                    Int(c, "omittedEntries", p, issues, 0, 100_000_000, out _);
+
+                    if (Arr(c, "items", p, issues, 0, Caps.ContainerItemsMax, out JArray stacks))
+                    {
+                        entries += stacks.Count;
+                        var seenStacks = new HashSet<string>(StringComparer.Ordinal);
+                        for (int j = 0; j < stacks.Count; j++)
+                        {
+                            string sp = p + ".items." + j;
+                            if (!ObjAt(stacks[j], sp, issues, out JObject s)) continue;
+                            Keys(s, sp, issues, "prefab", "quality", "stack");
+                            bool sPrefabOk = Str(s, "prefab", sp, issues, 0, null, Prefab, out string stackPrefab);
+                            bool qualityOk = Int(s, "quality", sp, issues, 1, 10, out int quality);
+                            Int(s, "stack", sp, issues, 1, 1_000_000_000, out _);
+                            if (sPrefabOk && qualityOk && !seenStacks.Add(stackPrefab + "@" + quality.ToString(CultureInfo.InvariantCulture)))
+                                issues.Add(new ValidationIssue(sp, "custom", "duplicate (prefab, quality) stack"));
+                        }
+                        if (unreadableOk && unreadable && (stacks.Count > 0 || usedOk && used != 0))
+                            issues.Add(new ValidationIssue(p + ".items", "custom", "an unreadable container carries no items"));
+                    }
+                    if (slotsOk && usedOk && used > slots)
+                        issues.Add(new ValidationIssue(p + ".usedSlots", "custom", "usedSlots exceeds slots"));
+                    if (prefabOk && xOk && yOk && zOk && creatorOk && !seen.Add(prefab + "|" + Coord(x) + "|" + Coord(y) + "|" + Coord(z) + "|" + creator))
+                        issues.Add(new ValidationIssue(p, "custom", "duplicate container (prefab, position, creator)"));
+                }
+                if (entries > Caps.ContainerEntriesMax)
+                    issues.Add(new ValidationIssue("containers", "too_big", $"items summed over all containers exceed {Caps.ContainerEntriesMax}"));
+            }
+
+            Int(o, "omittedShared", "", issues, 0, 1_000_000, out _);
+            Int(o, "omittedPrivate", "", issues, 0, 1_000_000, out _);
+        }
+
+        private static readonly string[] ProcessorTypes = { "smelter", "fermenter", "cooking", "incinerator" };
+        private static readonly string[] Formulas = { "vanilla", "custom" };
+
+        /// <summary>CONTRACT.md §5b (Zod: valheim-link-recipes.schema.ts, valheim-link-recipes-processing.schema.ts).</summary>
+        private static void Recipes(JObject o, List<ValidationIssue> issues)
+        {
+            Keys(o, "", issues, HeaderKeys, "locale", "atlas", "stations", "recipes", "pieces", "processors", "processes");
+            Header(o, issues);
+            Str(o, "locale", "", issues, 0, null, Locale);
+
+            bool hasAtlas = false; int aw = 0, ah = 0;
+            var atlas = o["atlas"];
+            if (atlas == null) issues.Add(new ValidationIssue("atlas", "invalid_type", "required (nullable)"));
+            else if (atlas.Type != JTokenType.Null)
+            {
+                if (ObjAt(atlas, "atlas", issues, out JObject a)) hasAtlas = BinaryRef(a, "atlas", issues, out aw, out ah);
+            }
+            var icons = new AtlasCheck { HasAtlas = hasAtlas, Width = aw, Height = ah };
+            int entries = 0;
+
+            var stations = new HashSet<string>(StringComparer.Ordinal);
+            if (Arr(o, "stations", "", issues, 0, Caps.StationsMax, out JArray stationList))
+            {
+                for (int i = 0; i < stationList.Count; i++)
+                {
+                    string p = "stations." + i;
+                    if (!ObjAt(stationList[i], p, issues, out JObject s)) continue;
+                    Keys(s, p, issues, "prefab", "name", "maxLevel", "stackableExtension", "upgrader", "icon");
+                    if (Str(s, "prefab", p, issues, 0, null, Prefab, out string prefab) && !stations.Add(prefab))
+                        issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate stations prefab"));
+                    Str(s, "name", p, issues, 1, 96, null);
+                    Int(s, "maxLevel", p, issues, 1, Caps.StationLevelMax, out _);
+                    Bool(s, "stackableExtension", p, issues);
+                    OptionalBool(s, "upgrader", p, issues);
+                    AtlasIcon(s, p, issues, icons);
+                }
+            }
+
+            if (Arr(o, "recipes", "", issues, 0, Caps.RecipesMax, out JArray recipes))
+            {
+                var ids = new HashSet<string>(StringComparer.Ordinal);
+                for (int i = 0; i < recipes.Count; i++)
+                {
+                    string p = "recipes." + i;
+                    if (!ObjAt(recipes[i], p, issues, out JObject r)) continue;
+                    Keys(r, p, issues, "id", "result", "amount", "enabled", "station", "repairStation", "minStationLevel", "upgradeOnly", "anyOneOf", "qualityResultAmountMultiplier", "formula", "resources");
+                    if (Str(r, "id", p, issues, 0, null, Prefab, out string id) && !ids.Add(id))
+                        issues.Add(new ValidationIssue(p + ".id", "custom", "duplicate recipe id"));
+                    Str(r, "result", p, issues, 0, null, Prefab);
+                    Int(r, "amount", p, issues, 1, 10_000, out _);
+                    Bool(r, "enabled", p, issues);
+                    StationRef(r, "station", p, issues, stations);
+                    StationRef(r, "repairStation", p, issues, stations);
+                    Int(r, "minStationLevel", p, issues, 0, Caps.StationLevelMax, out _);
+                    Bool(r, "upgradeOnly", p, issues);
+                    Bool(r, "anyOneOf", p, issues);
+                    Num(r, "qualityResultAmountMultiplier", p, issues, 0, 100);
+                    Enum(r, "formula", p, issues, Formulas, out _);
+                    entries += Resources(r, p, issues, true);
+                }
+            }
+
+            if (Arr(o, "pieces", "", issues, 0, Caps.PiecesMax, out JArray pieces))
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                for (int i = 0; i < pieces.Count; i++)
+                {
+                    string p = "pieces." + i;
+                    if (!ObjAt(pieces[i], p, issues, out JObject pc)) continue;
+                    Keys(pc, p, issues, "prefab", "name", "category", "tool", "station", "icon", "resources");
+                    if (Str(pc, "prefab", p, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
+                        issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate pieces prefab"));
+                    Str(pc, "name", p, issues, 1, 96, null);
+                    Str(pc, "category", p, issues, 0, null, Category);
+                    Str(pc, "tool", p, issues, 0, null, Prefab);
+                    StationRef(pc, "station", p, issues, stations);
+                    AtlasIcon(pc, p, issues, icons);
+                    entries += Resources(pc, p, issues, false);
+                }
+            }
+
+            var processors = new HashSet<string>(StringComparer.Ordinal);
+            if (Arr(o, "processors", "", issues, 0, Caps.ProcessorsMax, out JArray processorList))
+            {
+                for (int i = 0; i < processorList.Count; i++)
+                {
+                    string p = "processors." + i;
+                    if (!ObjAt(processorList[i], p, issues, out JObject pr)) continue;
+                    Keys(pr, p, issues, "prefab", "type", "fuel", "fuelPerProduct", "fuelSecondsPerUnit", "windPowered", "requiresRoof", "maxInput", "burntResult", "defaultResult");
+                    if (Str(pr, "prefab", p, issues, 0, null, Prefab, out string prefab) && !processors.Add(prefab))
+                        issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate processors prefab"));
+                    Enum(pr, "type", p, issues, ProcessorTypes, out _);
+                    NullablePrefab(pr, "fuel", p, issues, out _);
+                    NullableInt(pr, "fuelPerProduct", p, issues, 0, 1_000);
+                    NullableNum(pr, "fuelSecondsPerUnit", p, issues, 0.001, 86_400);
+                    Bool(pr, "windPowered", p, issues);
+                    Bool(pr, "requiresRoof", p, issues);
+                    NullableInt(pr, "maxInput", p, issues, 1, 10_000);
+                    NullablePrefab(pr, "burntResult", p, issues, out _);
+                    var dr = pr["defaultResult"];
+                    if (dr == null) issues.Add(new ValidationIssue(p + ".defaultResult", "invalid_type", "required (nullable)"));
+                    else if (dr.Type != JTokenType.Null && ObjAt(dr, p + ".defaultResult", issues, out JObject d))
+                    {
+                        Keys(d, p + ".defaultResult", issues, "prefab", "perInputs");
+                        Str(d, "prefab", p + ".defaultResult", issues, 0, null, Prefab);
+                        Int(d, "perInputs", p + ".defaultResult", issues, 1, 10_000, out _);
+                    }
+                }
+            }
+
+            if (Arr(o, "processes", "", issues, 0, Caps.ProcessesMax, out JArray processes))
+            {
+                for (int i = 0; i < processes.Count; i++)
+                {
+                    string p = "processes." + i;
+                    if (!ObjAt(processes[i], p, issues, out JObject pr)) continue;
+                    Keys(pr, p, issues, "processor", "inputs", "anyOneOf", "output", "seconds", "priority");
+                    if (Str(pr, "processor", p, issues, 0, null, Prefab, out string processor) && !processors.Contains(processor))
+                        issues.Add(new ValidationIssue(p + ".processor", "custom", "unknown processor"));
+                    if (Arr(pr, "inputs", p, issues, 1, Caps.ProcessInputsMax, out JArray inputs))
+                    {
+                        entries += inputs.Count;
+                        var seen = new HashSet<string>(StringComparer.Ordinal);
+                        for (int j = 0; j < inputs.Count; j++)
+                        {
+                            string ip = p + ".inputs." + j;
+                            if (!ObjAt(inputs[j], ip, issues, out JObject inp)) continue;
+                            Keys(inp, ip, issues, "prefab", "amount");
+                            if (Str(inp, "prefab", ip, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
+                                issues.Add(new ValidationIssue(ip + ".prefab", "custom", "duplicate input prefab"));
+                            Int(inp, "amount", ip, issues, 1, 10_000, out _);
+                        }
+                    }
+                    Bool(pr, "anyOneOf", p, issues);
+                    if (Obj(pr, "output", p, issues, out JObject output))
+                    {
+                        Keys(output, p + ".output", issues, "prefab", "amount");
+                        Str(output, "prefab", p + ".output", issues, 0, null, Prefab);
+                        Int(output, "amount", p + ".output", issues, 1, 10_000, out _);
+                    }
+                    NullableNum(pr, "seconds", p, issues, 0, 604_800);
+                    Int(pr, "priority", p, issues, -10_000, 10_000, out _);
+                }
+            }
+
+            if (icons.Any && atlas != null && atlas.Type == JTokenType.Null)
+                issues.Add(new ValidationIssue("atlas", "custom", "atlas icon without an atlas"));
+            if (entries > Caps.RecipeEntriesMax)
+                issues.Add(new ValidationIssue("", "too_big", $"recipe resources, piece resources and process inputs exceed {Caps.RecipeEntriesMax} in total"));
+        }
+
+        private sealed class AtlasCheck { public bool HasAtlas, Any; public int Width, Height; }
+
+        /// <summary>A recipes-kind icon: atlas-only (no file icons), nullable, inside the atlas when one is sent.</summary>
+        private static void AtlasIcon(JObject parent, string path, List<ValidationIssue> issues, AtlasCheck atlas)
+        {
+            string ip = Join(path, "icon");
+            var icon = parent["icon"];
+            if (icon == null) { issues.Add(new ValidationIssue(ip, "invalid_type", "required (nullable)")); return; }
+            if (icon.Type == JTokenType.Null) return;
+            if (!ObjAt(icon, ip, issues, out JObject ic)) return;
+            atlas.Any = true;
+            Keys(ic, ip, issues, "kind", "x", "y", "w", "h");
+            Literal(ic, "kind", ip, issues, "atlas");
+            bool xo = Int(ic, "x", ip, issues, 0, 16_383, out int x);
+            bool yo = Int(ic, "y", ip, issues, 0, 16_383, out int y);
+            bool wo = Int(ic, "w", ip, issues, 1, 512, out int w);
+            bool ho = Int(ic, "h", ip, issues, 1, 512, out int h);
+            if (atlas.HasAtlas && xo && yo && wo && ho && (x + w > atlas.Width || y + h > atlas.Height))
+                issues.Add(new ValidationIssue(ip, "custom", "icon outside atlas"));
+        }
+
+        /// <summary>A recipe's or piece's resources[]: prefab unique; returns the entry count for the message total.</summary>
+        private static int Resources(JObject parent, string path, List<ValidationIssue> issues, bool recipe)
+        {
+            if (!Arr(parent, "resources", path, issues, 0, Caps.RequirementsMax, out JArray list)) return 0;
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int j = 0; j < list.Count; j++)
+            {
+                string rp = path + ".resources." + j;
+                if (!ObjAt(list[j], rp, issues, out JObject res)) continue;
+                if (recipe) Keys(res, rp, issues, "prefab", "amount", "amountPerLevel", "extraAmountOnlyOneIngredient", "recover", "upgraderResource");
+                else Keys(res, rp, issues, "prefab", "amount", "recover");
+                if (Str(res, "prefab", rp, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
+                    issues.Add(new ValidationIssue(rp + ".prefab", "custom", "duplicate resources prefab"));
+                Int(res, "amount", rp, issues, 0, 10_000, out _);
+                if (recipe)
+                {
+                    Int(res, "amountPerLevel", rp, issues, 0, 10_000, out _);
+                    Int(res, "extraAmountOnlyOneIngredient", rp, issues, 0, 10_000, out _);
+                }
+                Bool(res, "recover", rp, issues);
+                if (recipe) OptionalBool(res, "upgraderResource", rp, issues);
+            }
+            return list.Count;
+        }
+
+        private static void StationRef(JObject parent, string key, string path, List<ValidationIssue> issues, HashSet<string> stations)
+        {
+            if (NullablePrefab(parent, key, path, issues, out string station) && station != null && !stations.Contains(station))
+                issues.Add(new ValidationIssue(Join(path, key), "custom", "unknown station"));
+        }
+
+        /// <summary>A coordinate as part of the container identity; -0 and 0 are one position, as in Zod's template-string key.</summary>
+        private static string Coord(double v) => (v == 0 ? 0d : v).ToString("R", CultureInfo.InvariantCulture);
 
         // ---------- primitives ----------
 
@@ -442,20 +707,53 @@ namespace RlValheimLink.Contract
             return ok;
         }
 
+        /// <summary>Zod 4 enum / literal: anything that is not one of the values (missing, another type, another string) is invalid_value.</summary>
         private static bool Enum(JObject parent, string key, string path, List<ValidationIssue> issues, string[] values, out string value)
         {
-            if (!Str(parent, key, path, issues, 0, null, null, out value)) return false;
-            if (Array.IndexOf(values, value) >= 0) return true;
+            var t = parent[key];
+            value = t != null && t.Type == JTokenType.String ? (string)t : null;
+            if (value != null && Array.IndexOf(values, value) >= 0) return true;
             issues.Add(new ValidationIssue(Join(path, key), "invalid_value", "one of " + string.Join("|", values)));
             return false;
         }
 
-        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues)
+        private static bool Literal(JObject parent, string key, string path, List<ValidationIssue> issues, string expected) =>
+            Enum(parent, key, path, issues, new[] { expected }, out _);
+
+        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues) =>
+            Bool(parent, key, path, issues, out _);
+
+        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues, out bool value)
         {
+            value = false;
             var t = parent[key];
             if (t == null) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "required")); return false; }
             if (t.Type != JTokenType.Boolean) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "expected boolean")); return false; }
+            value = (bool)t;
             return true;
+        }
+
+        /// <summary>Absent is fine; present must be a boolean (Zod `.optional()`, not nullable).</summary>
+        private static void OptionalBool(JObject parent, string key, string path, List<ValidationIssue> issues)
+        {
+            if (parent[key] != null) Bool(parent, key, path, issues);
+        }
+
+        /// <summary>A prefab id or JSON null; true when valid (value = null for JSON null).</summary>
+        private static bool NullablePrefab(JObject parent, string key, string path, List<ValidationIssue> issues, out string value)
+        {
+            value = null;
+            var t = parent[key];
+            if (t == null) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "required (nullable)")); return false; }
+            if (t.Type == JTokenType.Null) return true;
+            return Str(parent, key, path, issues, 0, null, Prefab, out value);
+        }
+
+        private static void NullableInt(JObject parent, string key, string path, List<ValidationIssue> issues, long min, long max)
+        {
+            var t = parent[key];
+            if (t == null) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "required (nullable)")); return; }
+            if (t.Type != JTokenType.Null) Int(parent, key, path, issues, min, max, out _);
         }
 
         private static bool NumberToken(JToken t, out double v)
@@ -481,14 +779,19 @@ namespace RlValheimLink.Contract
             return true;
         }
 
-        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max)
+        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max) =>
+            Num(parent, key, path, issues, min, max, out _);
+
+        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max, out double value)
         {
+            value = 0;
             string p = Join(path, key);
             var t = parent[key];
             if (t == null) { issues.Add(new ValidationIssue(p, "invalid_type", "required")); return false; }
             if (!NumberToken(t, out double d)) { issues.Add(new ValidationIssue(p, "invalid_type", "expected number")); return false; }
             if (d < min) { issues.Add(new ValidationIssue(p, "too_small", $">= {min}")); return false; }
             if (d > max) { issues.Add(new ValidationIssue(p, "too_big", $"<= {max}")); return false; }
+            value = d;
             return true;
         }
 
@@ -509,12 +812,16 @@ namespace RlValheimLink.Contract
                 issues.Add(new ValidationIssue(Join(path, key), "custom", "SteamID64 must be >= " + Caps.SteamId64Min));
         }
 
-        private static void Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues)
+        private static void Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues) =>
+            Int64Str(parent, key, path, issues, out _);
+
+        private static bool Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues, out string value)
         {
-            if (!Str(parent, key, path, issues, 1, null, Int64, out string v)) return;
-            var n = BigInteger.Parse(v, CultureInfo.InvariantCulture);
-            if (n < I64Min || n > I64Max)
-                issues.Add(new ValidationIssue(Join(path, key), "custom", "outside the signed 64-bit range"));
+            if (!Str(parent, key, path, issues, 1, null, Int64, out value)) return false;
+            var n = BigInteger.Parse(value, CultureInfo.InvariantCulture);
+            if (n >= I64Min && n <= I64Max) return true;
+            issues.Add(new ValidationIssue(Join(path, key), "custom", "outside the signed 64-bit range"));
+            return false;
         }
 
         private static void PrefabList(JObject parent, string key, string path, List<ValidationIssue> issues, int max)

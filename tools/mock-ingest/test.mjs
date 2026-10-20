@@ -37,6 +37,20 @@ test('every golden fixture is accepted on its kind route (plain and gzip); 202 c
   });
 });
 
+test('snapshot keys: items and recipes of one game version, and containers of two worlds, do not collide', async () => withMock(async (base) => {
+  const read = (f) => JSON.parse(readFileSync(join(golden, f), 'utf8'));
+  const status = async (m) => (await (await post(base, JSON.stringify(m))).json()).status;
+  const items = read('items-atlas.json'), recipes = read('recipes-vanilla.json'), containers = read('containers-basic.json');
+  assert.equal(recipes.gameVersion, items.gameVersion); assert.equal(recipes.capturedAt, items.capturedAt);
+  assert.equal(await status(items), 'accepted');
+  assert.equal(await status(recipes), 'accepted', 'recipes must not share the items key');
+  assert.equal(await status({ ...recipes, gameVersion: '1.0.20' }), 'accepted', 'another game version is another recipes snapshot');
+  assert.equal(await status(recipes), 'stale', 'same recipes key and capturedAt');
+  assert.equal(await status(containers), 'accepted');
+  assert.equal(await status({ ...containers, worldUid: '42' }), 'accepted', 'another world is another containers snapshot');
+  assert.equal(await status(containers), 'stale', 'same containers key and capturedAt');
+}));
+
 test("the mod's own fixtures are accepted under their serverId; file-icon blobs count as refs", async () => withMock(async (base) => {
   for (const f of readdirSync(own).filter((x) => x.endsWith('.json'))) {
     const r = await post(base, readFileSync(join(own, f)), {}, 'rlvl'); const t = await r.text(); assert.equal(r.status, 202, f + ' ' + t);
@@ -49,7 +63,7 @@ test('invalid fixtures: 400 schema_invalid / bitmap_invalid, or deferred §6 ref
   for (const name of Object.keys(expected)) {
     const raw = readFileSync(join(golden, 'invalid', name + '.json'));
     let kind; try { kind = kindOf(raw); } catch { kind = 'character'; }
-    const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items'].includes(kind) ? kind : 'character');
+    const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items', 'containers', 'recipes'].includes(kind) ? kind : 'character');
     if (expected[name].code === 'custom' && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue; // Zod-only refinements: the C# validator covers them
     assert.equal(r.status, 400, `${name}: ${r.status}`);
     const body = await r.json();
