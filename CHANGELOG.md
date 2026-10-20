@@ -2,6 +2,10 @@
 
 ## 0.2.2 — 2026-10-20
 
+- Contract re-pinned to Raid Ledger `c6e45bf` (additive, still v1): an `items` message may be up to
+  **12 MiB** (was 10 MiB; ROK-1855), so the largest item catalogue, with a file icon per item, now fits.
+  Until Raid Ledger's reverse proxy is raised too (ROK-1850) a message over 10 MiB is refused there
+  with 413 and dropped with a log line; before it was not sent at all. Typical catalogues are ~300 KB.
 - Server, chest dump diagnostic: the probe's `rows:` line reports the stack count as the game writes it
   (`ZPackage.WriteNumItems`), like the probe and totals lines since 0.2.1; it printed the int32 reading
   (`header count 655360003 vs decoded 3`). Logs only; nothing about uploads changes.

@@ -10,7 +10,7 @@ namespace RlValheimLink.Contract
 
         public const int CharacterMaxBytes = 2_097_152;
         public const int MapMaxBytes = 8_388_608;
-        public const int ItemsMaxBytes = 10_485_760;
+        public const int ItemsMaxBytes = 12_582_912;
         public const int BinaryMaxBytes = 16_777_216;
 
         public const int BitmapDataMaxChars = 3_000_000;

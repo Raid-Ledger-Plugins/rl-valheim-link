@@ -28,7 +28,7 @@ addFormats(ajv);
 const validate = ajv.compile(schema);
 
 // §7 constants (mirrors packages/contract/src/valheim-link-common.schema.ts)
-export const CAPS = { character: 2_097_152, map: 8_388_608, items: 10_485_760, binary: 16_777_216, bitmapEdgeMax: 4096 };
+export const CAPS = { character: 2_097_152, map: 8_388_608, items: 12_582_912, binary: 16_777_216, bitmapEdgeMax: 4096 };
 export const CAPTURED_AT_MAX_FUTURE_MS = 300_000;
 const bitmapBytes = (w, h) => Math.ceil((w * h) / 8);
 

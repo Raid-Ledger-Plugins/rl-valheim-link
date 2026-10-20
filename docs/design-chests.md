@@ -1154,7 +1154,8 @@ Raid Ledger Lead; stories filed in Backlog, related to ROK-1829/1833/1835):
 17. **Real bug, ROK-1855 (High):** raise `VALHEIM_LINK_ITEMS_MAX_BYTES` to
     12 MiB (an additive relaxation) after reproducing the 11.05 MB figure with
     the new largest-message test; CONTRACT §7 updated in the same PR. The mod
-    re-pins after it ships.
+    re-pins after it ships. **Shipped** (Raid Ledger `c6e45bf`, 2026-10-20;
+    pinned in mod 0.2.2).
 18. **`recipes` carries raw requirement fields** plus a documented
     per-quality formula; Raid Ledger computes per-quality amounts.
 19. **No history in the first dashboard**: latest snapshot only.

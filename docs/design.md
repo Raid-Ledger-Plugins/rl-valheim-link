@@ -234,7 +234,7 @@ success and advance the dedupe watermark.
 |---|---|---|---|---|
 | `character` | 15–40 KB (8×4 grid, ~20 skills, ~600 known items) | ~1.2 MB (512 stacks, 128 skills, 8192+8192+1024 ids at 96 chars) | 2 MiB | the array caps bind first (contract guarantee) |
 | `map` | 2048² bitset = 512 KiB raw → 10–120 KB gzip → ×4/3 base64; two layers + pins ≈ 50–400 KB JSON (UNVERIFIED until a real capture) | 2 × 3 000 000 chars + 2000 pins ≈ 7 MB | 8 MiB | contract guarantee |
-| `items` | ~2000 vanilla items × ~150 B ≈ 300 KB; the GamerSaloon mod set adds few items | 10 000 items ≈ 9.4 MB | 10 MiB | contract guarantee |
+| `items` | ~2000 vanilla items × ~150 B ≈ 300 KB; the GamerSaloon mod set adds few items | 10 000 file icons with `blob` refs ≈ 11.05 MB | 12 MiB (contract since c6e45bf; the production proxy refuses > 10 MiB until ROK-1850) | contract guarantee |
 | base map PNG | 2048² RGBA, biome fills compress well: 1–4 MB | 16 MiB cap check before send; else WARN + `baseMap: null` | 16 MiB | — |
 | icon atlas PNG | 64 px icons, 32 per row: 2000 icons → 2048×4032 ≈ 3–6 MB | 16 MiB check; if over, re-render at 48 px, then 32 px, then `icon: null` for the rest | 16 MiB | — |
 
