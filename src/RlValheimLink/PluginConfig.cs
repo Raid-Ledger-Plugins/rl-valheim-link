@@ -61,7 +61,7 @@ namespace RlValheimLink
 
             IconSize = cfg.Bind("Items", "IconSize", 64, new ConfigDescription("Client only. Icon edge in pixels for the items atlas (reduced automatically if the PNG would exceed 16 MiB).", new AcceptableValueRange<int>(16, 128)));
 
-            ChestsDumpOnStart = cfg.Bind("Chests", "DumpOnStart", false, "Server only. DIAGNOSTIC for the chest-inventory spike (docs/design-chests.md §7): 2 minutes after the world loads, log what the server can read from every container (lines start 'RLVL: chestdump'). Logs only; uploads nothing. Leave off unless asked to run it.");
+            ChestsDumpOnStart = cfg.Bind("Chests", "DumpOnStart", false, "Server only. DIAGNOSTIC for the chest-inventory spike (docs/design-chests.md §7): 2 minutes after the world loads, log what the server can read from every container (lines start 'RLVL: chestdump'). Logs only; uploads nothing, so it also runs on a world that is not in [Server] WorldAllowlist. Leave off unless asked to run it.");
             ChestsDumpRuns = cfg.Bind("Chests", "DumpRuns", 2, new ConfigDescription("Server only. How many dumps to run when DumpOnStart is on; every dump after the first also reports what changed since the previous one.", new AcceptableValueRange<int>(1, 6)));
             ChestsDumpRerunMinutes = cfg.Bind("Chests", "DumpRerunMinutes", 10, new ConfigDescription("Server only. Minutes between dumps (from the end of one to the start of the next).", new AcceptableValueRange<int>(1, 120)));
             ChestsDumpMaterials = cfg.Bind("Chests", "DumpMaterials", "Wood,Stone,Resin", "Server only. Comma-separated item prefab names (up to 5) whose totals over all player-built containers each dump prints, to compare with what you see in the chests.");

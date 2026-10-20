@@ -101,7 +101,11 @@ Answers the UNVERIFIED items of the chest-inventory design before any capture co
 **logs only**: no upload, no new message kind, nothing changes for clients. Every line starts
 `RLVL: chestdump[r<run>.c<check>]` (`r1` = first run, `c1`…`c7` = the seven checks of §7). It never
 prints the token, pin labels or the contents of any ZDO string, only lengths, item prefab names and
-counts, positions, player ids and Steam ids (the same ids the `hello` lines already log).
+counts, positions, player ids and Steam ids (the same ids the `hello` lines already log). It runs on
+any world, also one that is **not** in `[Server] WorldAllowlist`: there the rest of the link idles
+(`RLVL: world '<name>' not in Server.WorldAllowlist; link idle`, clients are declined, nothing reaches
+Raid Ledger) and the dump still runs. So run it on the test world and leave `WorldAllowlist` set to the
+production world.
 
 11. **Build the test chests (once, in the test world, as an admin with your normal client).** Place and
     fill, and write down what you put where:
@@ -115,10 +119,11 @@ counts, positions, player ids and Steam ids (the same ids the `hello` lines alre
     - optional: a cart with items in it (vehicles are counted separately).
     Then wait for a world save (the server logs one every `-saveinterval`, or type `save` in the F5
     console as an admin) and log out.
-12. **Install the build on the server only.** From this PR's checks, open the `build` job's run,
-    download the artifact `GamerSaloon-ValheimLink-<sha>`, unzip it (it contains the Thunderstore zip;
-    unzip that too) and copy the three DLLs from `plugins/RlValheimLink/` over the ones in the server's
-    `BepInEx/plugins/RlValheimLink/`. Clients stay on the pack's version (same RPC protocol).
+12. **Install 0.2.1 or later on the server.** Released: the DLLs of the Thunderstore package. Before
+    the release: from the PR's checks, open the `build` job's run, download the artifact
+    `GamerSaloon-ValheimLink-<sha>`, unzip it (it contains the Thunderstore zip; unzip that too) and copy
+    the three DLLs from `plugins/RlValheimLink/` over the ones in the server's
+    `BepInEx/plugins/RlValheimLink/`. Clients may stay on the pack's version (same RPC protocol).
     In the server's `BepInEx/config/RaidLedger.ValheimLink.cfg` set, under `[Chests]` (add the section by
     hand if the file was written by an older version):
     `DumpOnStart = true` and, if you used other materials in step 11, `DumpMaterials = <A>,<B>,<C>`
@@ -128,12 +133,16 @@ counts, positions, player ids and Steam ids (the same ids the `hello` lines alre
     DOWN/UP posts. **Do not join for the first two minutes**, so the first dump reads every chest before
     any player has loaded its area. Expect:
     `RLVL: loaded v0.2.1 (contract v1); …`
+    on the test world with `WorldAllowlist` set to the production world
+    `RLVL: world '<test world>' not in Server.WorldAllowlist; link idle`, then
     `RLVL: chestdump: ON (Chests.DumpOnStart) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
     two minutes later `RLVL: chestdump[r1] start (run 1 of 2): game=1.0.20 dedicated=True … playersConnected=0 …`,
     then the check lines below, and finally
     `RLVL: chestdump[r1] done in <s> s over <n> ticks` and
     `RLVL: chestdump: run 2 of 2 in 10 min — move some items in a chest you know before then (freshness check)`.
-14. **Freshness (check 6).** After `chestdump[r1] done`, join, and within the 10 minutes: take exactly 10
+14. **Freshness (check 6).** After `chestdump[r1] done`, join (on a world outside `WorldAllowlist` your
+    client logs `RLVL: server declined this client; nothing is sent this session: …`; that is expected),
+    and within the 10 minutes: take exactly 10
     Wood out of chest A and put them into chest B; open your personal chest; stay next to chest A until
     `RLVL: chestdump[r2] done …` appears, then you may log out. Expect
     `RLVL: chestdump[r2.c6] since the previous run (<m> min ago): changed=2 unchanged=<n> added=0 removed=0 …`,
@@ -166,7 +175,9 @@ What each check prints (paste back all of them; step 16):
 - **c4 creator:** `RLVL: chestdump[r1.c4] personal (privacy Private) containers with a creator: <n> …`, one line per personal chest
   `… creator=<playerId> creatorIndex=<int:… | absent> placer=<…> livePiece=<…>`, a key list of the first,
   and in run 2 `RLVL: chestdump[r2.c4] peer <uid>: playerId=<id> steam=<id> … personalChestsCreated=<n>` for you.
-  `creator` should equal the `playerId` in your server line `RLVL: peer <uid>: character character|<steamId>|<playerId> …`.
+  `creator` should equal that `playerId` (on a linked world also the one in your server line
+  `RLVL: peer <uid>: character character|<steamId>|<playerId> …`; on a world outside `WorldAllowlist`
+  no character is received, so the `chestdump[r2.c4] peer` line is the reference).
 - **c5 prefabs:** `RLVL: chestdump[r1.c5] Container <prefab>: size=<w>x<h> privacy=<…> buildable=<…> vehicle=<…> …` for every
   prefab with a Container, `Smelter|Fermenter|CookingStation|Incinerator|CraftingStation <prefab>: …` with
   their values and conversions, and two summary lines.
@@ -181,7 +192,7 @@ What each check prints (paste back all of them; step 16):
 
 16. **Send back:** the output of
     `grep 'RLVL: chestdump' BepInEx/LogOutput.log > chestdump.txt` on the server (the whole file, a few
-    hundred lines; attach it rather than pasting), your server line
+    hundred lines; attach it rather than pasting), on a linked world your server line
     `RLVL: peer <uid>: character character|<steamId>|<playerId> …` from step 14, what you placed in step 11
     (chest, prefab if you know it, contents), what you moved in step 14 and roughly when, and whether
     anything in the chests looked different in game afterwards.

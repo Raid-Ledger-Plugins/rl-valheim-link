@@ -20,6 +20,8 @@
   chests, every container and processing-station prefab with its values, and the 1.0.20-only recipe and
   station fields. `DumpRuns` (default 2) and `DumpRerunMinutes` (default 10) repeat it and report what
   changed (freshness). Logs only: no upload, no new message kind, no ZDO string contents in the log.
+  Because it uploads nothing it also runs on a world that is not in `WorldAllowlist` (a test world is
+  where it is meant to run) and without a Raid Ledger target.
 - Members that are new in 1.0.20 are read by name through `GameAccess`, so a wrong guess shows up as a
   dump line, never as a failure of the captures.
 

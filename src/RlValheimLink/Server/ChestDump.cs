@@ -17,8 +17,10 @@ namespace RlValheimLink.Server
     /// default). Two minutes after the world loads it finds every container ZDO, decodes each with the
     /// game's own Inventory.Load and logs `RLVL: chestdump[r&lt;run&gt;.c&lt;check&gt;]` lines for the seven
     /// checks; every later run (Chests.DumpRuns, Chests.DumpRerunMinutes apart) also reports what changed.
-    /// It uploads nothing and adds no message kind. ZDO string values are never logged (only their length
-    /// and whether they are base64): item prefab names, counts, ids and positions only.
+    /// It uploads nothing and adds no message kind, so Roles starts it, not ServerHalf: it also runs on a world
+    /// outside Server.WorldAllowlist (the link idles there) and without a Raid Ledger target. ZDO string values
+    /// are never logged (only their length and whether they are base64): item prefab names, counts, ids and
+    /// positions only.
     /// Time-sliced: one discovery call per prefab per tick, then at most StacksPerTick decoded stacks per tick.
     /// </summary>
     internal static class ChestDump
@@ -612,6 +614,7 @@ namespace RlValheimLink.Server
         {
             var personal = snapshots.Values.Where(s => s.Private).OrderBy(s => s.Prefab, StringComparer.Ordinal).ThenBy(s => s.Pos.x).ToList();
             int creatorIndexHash = GameAccess.ZdoVar("s_creatorIndex") ?? "creatorIndex".GetStableHashCode();
+            PeerIdentity.RefreshAll(); // ServerHalf refreshes peers only on a linked world; the dump also runs on an idle one
             var peers = PeerIdentity.Known();
             Log.Info($"chestdump[{r}.c4] personal (privacy Private) containers with a creator: {personal.Count}; distinct creators {personal.Select(s => s.Creator).Distinct().Count()}; peers known {peers.Count}");
             foreach (var s in personal.Take(MaxListed))
