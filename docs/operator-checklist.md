@@ -119,16 +119,14 @@ counts, positions, player ids and Steam ids (the same ids the `hello` lines alre
     download the artifact `GamerSaloon-ValheimLink-<sha>`, unzip it (it contains the Thunderstore zip;
     unzip that too) and copy the three DLLs from `plugins/RlValheimLink/` over the ones in the server's
     `BepInEx/plugins/RlValheimLink/`. Clients stay on the pack's version (same RPC protocol).
-    In the server's `BepInEx/config/RaidLedger.ValheimLink.cfg` set, under `[Chests]` (add the section by
-    hand if the file was written by an older version):
-    `DumpOnStart = true` and, if you used other materials in step 11, `DumpMaterials = <A>,<B>,<C>`
-    (item prefab names, e.g. `Wood,Stone,Resin`). Leave `DumpRuns = 2` and `DumpRerunMinutes = 10`.
+    Nothing to configure: the dump is on by default (`[Chests] Dump = true`). Only if you used other
+    materials in step 11, set `DumpMaterials = <A>,<B>,<C>` (item prefab names, e.g. `Wood,Stone,Resin`).
 13. **Silence Uptime Kuma, then restart the server.** Never restart without it: pause the server's Kuma
     monitor first (a Kuma maintenance window, or a power action with monitors suppressed), or Discord gets
     DOWN/UP posts. **Do not join for the first two minutes**, so the first dump reads every chest before
     any player has loaded its area. Expect:
     `RLVL: loaded v0.2.2 (contract v1); …`
-    `RLVL: chestdump: ON (Chests.DumpOnStart) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
+    `RLVL: chestdump: ON (Chests.Dump, default on) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
     two minutes later `RLVL: chestdump[r1] start (run 1 of 2): game=1.0.20 dedicated=True … playersConnected=0 …`,
     then the check lines below, and finally
     `RLVL: chestdump[r1] done in <s> s over <n> ticks` and
@@ -141,9 +139,9 @@ counts, positions, player ids and Steam ids (the same ids the `hello` lines alre
     `RLVL: chestdump[r2.c6] materials since the previous run: Wood <a>→<a>, …` (moving between two shared
     chests leaves the total unchanged) and a key list of each changed chest (what a 1.0.20 client writes).
     Also note whether the game stuttered for you while run 2 was going (it logs its busiest tick).
-15. **Afterwards:** set `DumpOnStart = false` (it only acts at start, so no restart is needed now; it would
-    run again on the next start). Lift the Kuma silencing as you normally would once you are done with
-    the server.
+15. **Afterwards:** nothing to switch off. The dump runs again after every start of this test build;
+    going back to the pack's version (or the real chest feature) removes it. Lift the Kuma silencing as
+    you normally would once you are done with the server.
 
 What each check prints (paste back all of them; step 16):
 

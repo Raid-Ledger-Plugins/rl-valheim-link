@@ -2,10 +2,10 @@
 
 ## 0.2.2 — 2026-10-19
 
-Diagnostic build for the chest-inventory spike (`docs/design-chests.md` §7). Nothing changes unless an
-operator turns it on.
+Diagnostic test build for the chest-inventory spike (`docs/design-chests.md` §7). The dump is **on by
+default** (operator ruling: nothing should need a flag); it only writes log lines.
 
-- **`[Chests] DumpOnStart`** (server only, default `false`): two minutes after the world loads, the server
+- **`[Chests] Dump`** (server only, default `true`): two minutes after every start, the server
   reads every container from the world's ZDOs with the game's own `Inventory.Load` and logs
   `RLVL: chestdump[r<run>.c<check>]` lines: the keys on a few known chests (`items` / `itemData` hashes),
   which data shape and which `Inventory.Load` variant decode a 1.0.20 chest (and whether the temporary
