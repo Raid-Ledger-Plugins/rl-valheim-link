@@ -12,6 +12,7 @@ namespace RlValheimLink.Contract
         public const int MapMaxBytes = 8_388_608;
         public const int ItemsMaxBytes = 12_582_912;
         public const int ContainersMaxBytes = 10_485_760;
+        public const int RecipesMaxBytes = 12_582_912;
         public const int BinaryMaxBytes = 16_777_216;
 
         public const int BitmapDataMaxChars = 3_000_000;
@@ -33,6 +34,15 @@ namespace RlValheimLink.Contract
         public const int ContainerItemsMax = 256;
         public const int ContainerSlotsMax = 4096;
         public const int ContainerEntriesMax = 50_000;
+        public const int RecipesMax = 4096;
+        public const int PiecesMax = 4096;
+        public const int StationsMax = 256;
+        public const int ProcessorsMax = 256;
+        public const int ProcessesMax = 2048;
+        public const int RequirementsMax = 16;
+        public const int ProcessInputsMax = 8;
+        public const int RecipeEntriesMax = 12_000;
+        public const int StationLevelMax = 20;
 
         public const int TimestampMaxChars = 24;
         public const int WorldCoordMax = 32_768;
@@ -71,6 +81,7 @@ namespace RlValheimLink.Contract
                 case "map": return MapMaxBytes;
                 case "items": return ItemsMaxBytes;
                 case "containers": return ContainersMaxBytes;
+                case "recipes": return RecipesMaxBytes;
                 default: return 0;
             }
         }

@@ -822,7 +822,7 @@ c.privacy = 'private' AND (
 
 ## 4. Linear story draft — contract: `containers` kind (filed as ROK-1853)
 
-**Shipped** in Raid Ledger `c7914ec` (2026-10-20), pinned in mod 0.2.2: CONTRACT.md §5a is
+**Shipped** in Raid Ledger `c7914ec` (2026-10-20), pinned in mod 0.2.2 (at `cef3748`): CONTRACT.md §5a is
 now the source of truth for the field table, caps and refinements; this draft is kept for the
 reasoning. The mod 0.2.2 validator knows the kind; nothing sends it until the chest scanner ships.
 
@@ -906,6 +906,11 @@ accepted by the ingest integration spec; a second message with an older
 `capturedAt` is `stale`.
 
 ## 5. Linear story draft — contract: `recipes` kind (filed as ROK-1854, with the planner)
+
+**Shipped** in Raid Ledger `cef3748` (2026-10-20), pinned in mod 0.2.2: CONTRACT.md §5b is now
+the source of truth (raw requirement fields, atlas-only icons, `stations[].upgrader` and
+`resources[].upgraderResource` optional); this draft is kept for the reasoning. The mod 0.2.2
+validator knows the kind; nothing sends it until the recipes export ships.
 
 **Title:** Valheim Link contract v1 (additive): `recipes` message — crafting
 recipes, build pieces, stations and processing steps
