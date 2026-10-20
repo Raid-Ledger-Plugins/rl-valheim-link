@@ -89,11 +89,13 @@ namespace RlValheimLink.Server
 
             Log.Info($"server half active: serverId='{PluginConfig.ServerId.Value}' baseUrl='{PluginConfig.BaseUrl.Value}' token={(tokenSet ? "set" : "MISSING")} world={_worldUid} game={_gameVersion} spool={SpoolDirectory} ({_spool.Summary()})");
             if (!configured) Log.Warn("RaidLedger.BaseUrl, ServerToken and ServerId must all be set in BepInEx/config/RaidLedger.ValheimLink.cfg; messages are spooled but NOT uploaded until then");
+            ChestDump.Start();
         }
 
         public static void Stop()
         {
             _active = false; _worldIdle = false;
+            ChestDump.Stop();
             LinkChannel.PayloadReceived -= OnPayload;
             _client?.Dispose(); _client = null; _uploader = null; _spool = null; _baseMap = null;
         }
@@ -115,6 +117,7 @@ namespace RlValheimLink.Server
                     else if (_baseMap.Tick()) SpoolBaseMap();
                 }
                 if (Configured()) _uploader.Tick(now);
+                ChestDump.Tick(now);
                 if (now >= _nextStatus)
                 {
                     _nextStatus = now.AddMinutes(5);

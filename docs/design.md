@@ -263,6 +263,9 @@ client a few hundred KB of upload once per changed save.
 | `Client.SendCharacter` / `SendMap` | true | client | finer opt-outs |
 | `Client.MinSecondsBetweenCharacter` / `…Map` | 30 / 300 | client | throttles |
 | `Items.IconSize` | 64 | client | atlas icon edge in px |
+| `Chests.DumpOnStart` | false | server | **diagnostic** for the chest-inventory spike (`docs/design-chests.md` §7): 2 min after world load, log `RLVL: chestdump` lines about every container; uploads nothing |
+| `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
+| `Chests.DumpMaterials` | `Wood,Stone,Resin` | server | item prefabs whose totals each dump prints (up to 5) |
 
 ## 9. Open questions for the operator (defaults in bold)
 

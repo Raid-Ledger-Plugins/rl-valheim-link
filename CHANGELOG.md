@@ -10,6 +10,18 @@
   character's latest snapshot in Raid Ledger.
 - Client: a `reject` whose reason starts with `hello: ` now stops the session's captures (older
   servers never send one).
+- **`[Chests] DumpOnStart`** (server only, default `false`): a diagnostic for the planned chest-inventory
+  capture; nothing changes unless an operator turns it on. Two minutes after the world loads, the server
+  reads every container from the world's ZDOs with the game's own `Inventory.Load` and logs
+  `RLVL: chestdump[r<run>.c<check>]` lines: the keys on a few known chests (`items` / `itemData` hashes),
+  which data shape and which `Inventory.Load` variant decode a 1.0.20 chest (and whether the temporary
+  inventory avoids instantiating item objects), milliseconds per stack, row counts, counts per prefab
+  (duplicates, creator 0, gone, dropped), totals of `DumpMaterials`, `creator` / `creatorIndex` on personal
+  chests, every container and processing-station prefab with its values, and the 1.0.20-only recipe and
+  station fields. `DumpRuns` (default 2) and `DumpRerunMinutes` (default 10) repeat it and report what
+  changed (freshness). Logs only: no upload, no new message kind, no ZDO string contents in the log.
+- Members that are new in 1.0.20 are read by name through `GameAccess`, so a wrong guess shows up as a
+  dump line, never as a failure of the captures.
 
 ## 0.2.0 — 2026-10-19
 

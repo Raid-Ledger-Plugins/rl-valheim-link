@@ -67,6 +67,9 @@ namespace RlValheimLink.Server
 
         public static PeerFacts Get(long uid) => Cache.TryGetValue(uid, out var f) ? f : null;
 
+        /// <summary>Every peer seen in the last ten minutes (the cache), for diagnostics.</summary>
+        public static List<PeerFacts> Known() => new List<PeerFacts>(Cache.Values);
+
         /// <summary>The local host's own facts when a non-dedicated server receives its own loop-back messages.</summary>
         public static PeerFacts Self(long uid)
         {
