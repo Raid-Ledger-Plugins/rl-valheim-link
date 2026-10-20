@@ -49,7 +49,7 @@ test('invalid fixtures: 400 schema_invalid / bitmap_invalid, or deferred §6 ref
   for (const name of Object.keys(expected)) {
     const raw = readFileSync(join(golden, 'invalid', name + '.json'));
     let kind; try { kind = kindOf(raw); } catch { kind = 'character'; }
-    const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items'].includes(kind) ? kind : 'character');
+    const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items', 'containers'].includes(kind) ? kind : 'character');
     if (expected[name].code === 'custom' && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue; // Zod-only refinements: the C# validator covers them
     assert.equal(r.status, 400, `${name}: ${r.status}`);
     const body = await r.json();

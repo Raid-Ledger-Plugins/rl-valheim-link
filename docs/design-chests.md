@@ -822,6 +822,10 @@ c.privacy = 'private' AND (
 
 ## 4. Linear story draft — contract: `containers` kind (filed as ROK-1853)
 
+**Shipped** in Raid Ledger `c7914ec` (2026-10-20), pinned in mod 0.2.2: CONTRACT.md §5a is
+now the source of truth for the field table, caps and refinements; this draft is kept for the
+reasoning. The mod 0.2.2 validator knows the kind; nothing sends it until the chest scanner ships.
+
 **Title:** Valheim Link contract v1 (additive): `containers` message — chest
 contents per world
 

@@ -2,12 +2,15 @@
 
 ## 0.2.2 — 2026-10-20
 
-- Contract re-pinned to Raid Ledger `c6e45bf` (additive, still v1): an `items` message may be up to
-  **12 MiB** (was 10 MiB; ROK-1855), so the largest item catalogue, with a file icon per item, now fits.
-  Raid Ledger's reverse proxy still limits a request body to 10 MiB until ROK-1850, but that is the body
-  on the wire: with `[Upload] Gzip = true` (the default) even the largest catalogue compresses to well
-  under 1 MiB. Only with `Gzip = false` could an `items` POST over 10 MiB be refused (413, dropped with
-  a log line). Typical catalogues are ~300 KB of JSON.
+- Contract re-pinned to Raid Ledger `c7914ec` (additive, still v1):
+  - an `items` message may be up to **12 MiB** (was 10 MiB; ROK-1855), so the largest item catalogue,
+    with a file icon per item, now fits. Raid Ledger's reverse proxy still limits a request body to
+    10 MiB until ROK-1850, but that is the body on the wire: with `[Upload] Gzip = true` (the default)
+    even the largest catalogue compresses to well under 1 MiB. Only with `Gzip = false` could an `items`
+    POST over 10 MiB be refused (413, dropped with a log line). Typical catalogues are ~300 KB of JSON;
+  - the new **`containers`** kind (ROK-1853): the pre-send validator knows its rules (unique container
+    identity and (prefab, quality) stacks, `usedSlots` ≤ `slots`, unreadable ⇒ empty, creator never 0,
+    ≤ 50 000 entries per message). The mod does not send it yet; the chest scanner is a later release.
 - Server, chest dump diagnostic: the probe's `rows:` line reports the stack count as the game writes it
   (`ZPackage.WriteNumItems`), like the probe and totals lines since 0.2.1; it printed the int32 reading
   (`header count 655360003 vs decoded 3`). Logs only; nothing about uploads changes.

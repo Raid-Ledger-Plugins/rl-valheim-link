@@ -60,9 +60,9 @@ namespace RlValheimLink.Contract
             if (obj == null) { issues.Add(new ValidationIssue("", "invalid_type", "message must be an object")); return issues; }
 
             string kind = (obj["kind"] as JValue)?.Type == JTokenType.String ? (string)obj["kind"] : null;
-            if (kind != "character" && kind != "map" && kind != "items")
+            if (kind != "character" && kind != "map" && kind != "items" && kind != "containers")
             {
-                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map or items"));
+                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map, items or containers"));
                 return issues;
             }
 
@@ -71,6 +71,7 @@ namespace RlValheimLink.Contract
                 case "character": Character(obj, issues); break;
                 case "map": Map(obj, issues); break;
                 case "items": Items(obj, issues); break;
+                case "containers": Containers(obj, issues); break;
             }
             return issues;
         }
@@ -375,6 +376,70 @@ namespace RlValheimLink.Contract
                 issues.Add(new ValidationIssue("atlas", "custom", "atlas icon without an atlas"));
         }
 
+        private static readonly string[] ContainerPrivacy = { "public", "private", "group" };
+
+        private static void Containers(JObject o, List<ValidationIssue> issues)
+        {
+            Keys(o, "", issues, HeaderKeys, "worldUid", "containers", "omittedShared", "omittedPrivate");
+            Header(o, issues);
+            Int64Str(o, "worldUid", "", issues);
+
+            if (Arr(o, "containers", "", issues, 0, Caps.ContainersMax, out JArray containers))
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                int entries = 0;
+                for (int i = 0; i < containers.Count; i++)
+                {
+                    string p = "containers." + i;
+                    if (!ObjAt(containers[i], p, issues, out JObject c)) continue;
+                    Keys(c, p, issues, "prefab", "x", "y", "z", "creatorPlayerId", "privacy", "vehicle", "slots", "usedSlots", "unreadable", "omittedEntries", "items");
+                    bool prefabOk = Str(c, "prefab", p, issues, 1, 96, Prefab, out string prefab);
+                    bool xOk = Num(c, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double x);
+                    bool yOk = Num(c, "y", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double y);
+                    bool zOk = Num(c, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double z);
+                    bool creatorOk = Int64Str(c, "creatorPlayerId", p, issues, out string creator);
+                    if (creatorOk && creator == "0") { issues.Add(new ValidationIssue(p + ".creatorPlayerId", "custom", "creatorPlayerId must not be 0")); creatorOk = false; }
+                    Enum(c, "privacy", p, issues, ContainerPrivacy, out _);
+                    Bool(c, "vehicle", p, issues);
+                    bool slotsOk = Int(c, "slots", p, issues, 1, Caps.ContainerSlotsMax, out int slots);
+                    bool usedOk = Int(c, "usedSlots", p, issues, 0, Caps.ContainerSlotsMax, out int used);
+                    bool unreadableOk = Bool(c, "unreadable", p, issues, out bool unreadable);
+                    Int(c, "omittedEntries", p, issues, 0, 100_000_000, out _);
+
+                    if (Arr(c, "items", p, issues, 0, Caps.ContainerItemsMax, out JArray stacks))
+                    {
+                        entries += stacks.Count;
+                        var seenStacks = new HashSet<string>(StringComparer.Ordinal);
+                        for (int j = 0; j < stacks.Count; j++)
+                        {
+                            string sp = p + ".items." + j;
+                            if (!ObjAt(stacks[j], sp, issues, out JObject s)) continue;
+                            Keys(s, sp, issues, "prefab", "quality", "stack");
+                            bool sPrefabOk = Str(s, "prefab", sp, issues, 1, 96, Prefab, out string stackPrefab);
+                            bool qualityOk = Int(s, "quality", sp, issues, 1, 10, out int quality);
+                            Int(s, "stack", sp, issues, 1, 1_000_000_000, out _);
+                            if (sPrefabOk && qualityOk && !seenStacks.Add(stackPrefab + "@" + quality.ToString(CultureInfo.InvariantCulture)))
+                                issues.Add(new ValidationIssue(sp, "custom", "duplicate (prefab, quality) stack"));
+                        }
+                        if (unreadableOk && unreadable && (stacks.Count > 0 || usedOk && used != 0))
+                            issues.Add(new ValidationIssue(p + ".items", "custom", "an unreadable container carries no items"));
+                    }
+                    if (slotsOk && usedOk && used > slots)
+                        issues.Add(new ValidationIssue(p + ".usedSlots", "custom", "usedSlots exceeds slots"));
+                    if (prefabOk && xOk && yOk && zOk && creatorOk && !seen.Add(prefab + "|" + Coord(x) + "|" + Coord(y) + "|" + Coord(z) + "|" + creator))
+                        issues.Add(new ValidationIssue(p, "custom", "duplicate container (prefab, position, creator)"));
+                }
+                if (entries > Caps.ContainerEntriesMax)
+                    issues.Add(new ValidationIssue("containers", "too_big", $"items summed over all containers exceed {Caps.ContainerEntriesMax}"));
+            }
+
+            Int(o, "omittedShared", "", issues, 0, 1_000_000, out _);
+            Int(o, "omittedPrivate", "", issues, 0, 1_000_000, out _);
+        }
+
+        /// <summary>A coordinate as part of the container identity; -0 and 0 are one position, as in Zod's template-string key.</summary>
+        private static string Coord(double v) => (v == 0 ? 0d : v).ToString("R", CultureInfo.InvariantCulture);
+
         // ---------- primitives ----------
 
         private static string Join(string path, string key) => path.Length == 0 ? key : path + "." + key;
@@ -450,11 +515,16 @@ namespace RlValheimLink.Contract
             return false;
         }
 
-        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues)
+        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues) =>
+            Bool(parent, key, path, issues, out _);
+
+        private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues, out bool value)
         {
+            value = false;
             var t = parent[key];
             if (t == null) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "required")); return false; }
             if (t.Type != JTokenType.Boolean) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "expected boolean")); return false; }
+            value = (bool)t;
             return true;
         }
 
@@ -481,14 +551,19 @@ namespace RlValheimLink.Contract
             return true;
         }
 
-        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max)
+        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max) =>
+            Num(parent, key, path, issues, min, max, out _);
+
+        private static bool Num(JObject parent, string key, string path, List<ValidationIssue> issues, double min, double max, out double value)
         {
+            value = 0;
             string p = Join(path, key);
             var t = parent[key];
             if (t == null) { issues.Add(new ValidationIssue(p, "invalid_type", "required")); return false; }
             if (!NumberToken(t, out double d)) { issues.Add(new ValidationIssue(p, "invalid_type", "expected number")); return false; }
             if (d < min) { issues.Add(new ValidationIssue(p, "too_small", $">= {min}")); return false; }
             if (d > max) { issues.Add(new ValidationIssue(p, "too_big", $"<= {max}")); return false; }
+            value = d;
             return true;
         }
 
@@ -509,12 +584,16 @@ namespace RlValheimLink.Contract
                 issues.Add(new ValidationIssue(Join(path, key), "custom", "SteamID64 must be >= " + Caps.SteamId64Min));
         }
 
-        private static void Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues)
+        private static void Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues) =>
+            Int64Str(parent, key, path, issues, out _);
+
+        private static bool Int64Str(JObject parent, string key, string path, List<ValidationIssue> issues, out string value)
         {
-            if (!Str(parent, key, path, issues, 1, null, Int64, out string v)) return;
-            var n = BigInteger.Parse(v, CultureInfo.InvariantCulture);
-            if (n < I64Min || n > I64Max)
-                issues.Add(new ValidationIssue(Join(path, key), "custom", "outside the signed 64-bit range"));
+            if (!Str(parent, key, path, issues, 1, null, Int64, out value)) return false;
+            var n = BigInteger.Parse(value, CultureInfo.InvariantCulture);
+            if (n >= I64Min && n <= I64Max) return true;
+            issues.Add(new ValidationIssue(Join(path, key), "custom", "outside the signed 64-bit range"));
+            return false;
         }
 
         private static void PrefabList(JObject parent, string key, string path, List<ValidationIssue> issues, int max)
