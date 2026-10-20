@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 — unreleased
+## 0.2.1 — 2026-10-20
 
 - **`[Server] WorldAllowlist`** (comma-separated world names, case-insensitive; empty = every world).
   When the loaded world is not listed the server half stays idle: no base-map render, every client's
