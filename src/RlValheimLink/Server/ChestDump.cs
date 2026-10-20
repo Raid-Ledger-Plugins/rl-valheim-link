@@ -498,8 +498,7 @@ namespace RlValheimLink.Server
             }
             int v = data.Length >= 4 ? BitConverter.ToInt32(data, 0) : int.MinValue;
             int c = data.Length >= 8 ? BitConverter.ToInt32(data, 4) : -1;
-            int numItems = data.Length >= 5 ? ((data[4] & 0x80) != 0 && data.Length >= 6 ? ((data[4] & 0x7F) << 8) | data[5] : data[4]) : -1;
-            Log.Info($"chestdump[{tag}] {p.Name} source={source} {data.Length} bytes; header int32 version={v} ({GameAccess.ItemVersionName(v) ?? "not a Version.Item value"}) int32 count={c} (numItems reading={numItems}) first16={Hex(data, 16)}");
+            Log.Info($"chestdump[{tag}] {p.Name} source={source} {data.Length} bytes; header int32 version={v} ({GameAccess.ItemVersionName(v) ?? "not a Version.Item value"}) count={NumItems(data)} (numItems; int32 reading {c}) first16={Hex(data, 16)}");
 
             var results = new List<(Loader loader, Decoded d, int awakes, int objects)>();
             foreach (var L in Loaders())
@@ -571,12 +570,17 @@ namespace RlValheimLink.Server
             return null;
         }
 
+        /// <summary>The stack count after the int32 version, as ZPackage.WriteNumItems writes it: one byte below 128,
+        /// else two bytes with the high bit set on the first. Read as an int32 it is garbage (2 stacks read 655360002).</summary>
+        private static int NumItems(byte[] data) =>
+            data.Length >= 5 ? ((data[4] & 0x80) != 0 ? (data.Length >= 6 ? ((data[4] & 0x7F) << 8) | data[5] : -1) : data[4]) : -1;
+
         private static Decoded Decode(ZDO zdo, PrefabInfo p, Loader loader)
         {
             var d = new Decoded();
             byte[] data = ReadData(zdo, out d.Source);
             if (data == null) { if (d.Source != null) d.Error = d.Source + " is not base64"; return d; }
-            if (data.Length >= 8) { d.HeaderVersion = BitConverter.ToInt32(data, 0); d.HeaderCount = BitConverter.ToInt32(data, 4); }
+            if (data.Length >= 5) { d.HeaderVersion = BitConverter.ToInt32(data, 0); d.HeaderCount = NumItems(data); }
             var sw = Stopwatch.StartNew();
             try
             {

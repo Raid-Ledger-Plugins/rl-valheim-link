@@ -173,7 +173,7 @@ What each check prints (paste back all of them; step 16):
   followed by one `string` / `bytes` / `int` / `long` line per key (`[= "items"]` / `[= "itemData"]` mark the two candidates).
 - **c2 decode:** `RLVL: chestdump[r1.c2] visibility <Type>: <member>=<public|private|missing> …` (the real
   1.0.20 visibility of every member the design relies on); per probe
-  `RLVL: chestdump[r1.c2.p<n>] <prefab> source=<string:items|bytes:items|bytes:itemData|string:itemData> <n> bytes; header int32 version=<v> (<name>) int32 count=<c> …`,
+  `RLVL: chestdump[r1.c2.p<n>] <prefab> source=<string:items|bytes:items|bytes:itemData|string:itemData> <n> bytes; header int32 version=<v> (<name>) count=<n> (numItems; int32 reading <c>) …`,
   six `loader <variant>: stacks=<n> in <ms> ms (<ms> ms/stack …) itemDrop.Awake=<n> itemDropObjects+=<n> inventory=<w>x<h> maxRow=<n> read=<pos>/<size> bytes …` lines
   (`itemDrop.Awake=0` on an `Inventory(true)` variant = the temporary inventory does not instantiate item
   objects), up to eight `item <prefab> x<stack> q<quality> …` lines, a `rows:` line, and once
