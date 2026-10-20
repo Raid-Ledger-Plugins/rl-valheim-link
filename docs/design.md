@@ -306,7 +306,16 @@ client a few hundred KB of upload once per changed save.
 
 ## 10. Contract change requests
 
-None. Everything the mod reads fits v1. **Received (additive, 2026-10-18,
+**Proposed, not filed (2026-10-19):** two new additive kinds, `containers`
+(chest contents per world, scanned by the server every 10 minutes, on by
+default) and
+`recipes` (crafting recipes, build pieces, stations and processing steps,
+exported by an admin client). Scouting
+design and Linear-ready story drafts: [`design-chests.md`](design-chests.md)
+§4–§5. The mod emits neither until Raid Ledger ships them and the pin is
+refreshed.
+
+For what is shipped: everything the mod reads fits v1. **Received (additive, 2026-10-18,
 pinned at the commit in `contract/PIN.md`):** a `file` item icon may carry an
 optional `blob` binary ref so a per-file PNG goes through the blob route.
 The mod emits atlas icons, so it does not use this field; the model,
