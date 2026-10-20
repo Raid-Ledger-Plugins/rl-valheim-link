@@ -34,6 +34,13 @@ leaves your PC except through the game server you are playing on.
    server's `adminlist.txt`, `Steam_7656…` format), once per game version and again when the server's
    mod set changes. The server asks the first admin who joins; nothing else is needed. To let any player
    do it, set `[Server] ItemsExportBy = anyone`.
+5. **Test world on the same server:** if you sometimes boot this server into another world (a test
+   world, an event world), set `[Server] WorldAllowlist` to your production world's name, e.g.
+   `WorldAllowlist = Midgard` (several: comma-separated; case does not matter). On any other world the
+   link stays idle — the log says `RLVL: world 'x' not in Server.WorldAllowlist; link idle`, joining
+   clients are told the world is not linked and stop sending (clients older than 0.2.1 keep sending and
+   the server drops it), and nothing reaches Raid Ledger. Without
+   it, a character played on the test world becomes that character's latest snapshot on the site.
 
 ## Operations (operator)
 
@@ -44,6 +51,10 @@ leaves your PC except through the game server you are playing on.
   character and map data re-send on their next save.
 - **Switching worlds:** the base map is rendered once per world and game version (about 20 s of server
   ticks on first load) and cached under `BepInEx/RLValheimLink/spool/basemap/`.
+- **Chest diagnostic (on by default, dedicated server only):** two minutes after every start the server
+  logs `RLVL: chestdump` lines about every chest (counts, positions, item names, creator ids, and the
+  player and Steam ids of connected players). It uploads nothing; each of its runs (two per start,
+  about 2 and about 12 minutes in) can cause a short hitch. `[Chests] Dump = false` skips it.
 - `rlvl status` in a client's F5 console (launch option `-console`) prints what the mod is doing.
 
 ## Privacy

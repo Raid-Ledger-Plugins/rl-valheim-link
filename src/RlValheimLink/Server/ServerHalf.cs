@@ -32,7 +32,9 @@ namespace RlValheimLink.Server
         private static BaseMapRenderer _baseMap;
         private static DateTime _nextPeerRefresh = DateTime.MinValue, _nextStatus = DateTime.MinValue, _baseMapRetryAt = DateTime.MinValue;
         private static string _itemsLeasePeer; private static DateTime _itemsLeaseUntil = DateTime.MinValue;
-        private static string _worldUid, _gameVersion;
+        private static string _worldUid, _gameVersion, _worldName;
+        /// <summary>The loaded world is not in Server.WorldAllowlist: hellos are declined, nothing is rendered, spooled or uploaded.</summary>
+        private static bool _worldIdle;
 
         public static string SpoolDirectory =>
             string.IsNullOrEmpty(PluginConfig.SpoolDirectory.Value) ? Path.Combine(BepInEx.Paths.BepInExRootPath, "RLValheimLink", "spool") : PluginConfig.SpoolDirectory.Value;
@@ -45,6 +47,13 @@ namespace RlValheimLink.Server
             PeerIdentity.Reset();
             _worldUid = GameInfo.WorldUid();
             _gameVersion = GameInfo.GameVersion();
+            _worldName = GameInfo.WorldName();
+            _worldIdle = !WorldAllowlist.Allows(PluginConfig.WorldAllowlist.Value, _worldName);
+            if (_worldIdle)
+            {
+                Log.Info($"world '{_worldName}' not in Server.WorldAllowlist; link idle");
+                return;
+            }
 
             bool tokenSet = !string.IsNullOrEmpty(PluginConfig.ServerToken.Value);
             bool configured = tokenSet && !string.IsNullOrEmpty(PluginConfig.ServerId.Value) && !string.IsNullOrEmpty(PluginConfig.BaseUrl.Value);
@@ -84,14 +93,14 @@ namespace RlValheimLink.Server
 
         public static void Stop()
         {
-            _active = false;
+            _active = false; _worldIdle = false;
             LinkChannel.PayloadReceived -= OnPayload;
             _client?.Dispose(); _client = null; _uploader = null; _spool = null; _baseMap = null;
         }
 
         public static void Tick()
         {
-            if (!_active) return;
+            if (!_active || _worldIdle) return;
             var now = DateTime.UtcNow;
             try
             {
@@ -127,6 +136,7 @@ namespace RlValheimLink.Server
         }
 
         public static string Status() => !_active ? "server half inactive"
+            : _worldIdle ? $"link idle: world '{_worldName}' not in Server.WorldAllowlist"
             : $"uploader={_uploader?.State} {_spool?.Summary()} uploaded={_uploader?.Uploaded} failed={_uploader?.Failed} baseMap={(_baseMap == null ? "off" : _baseMap.Done ? "ready" : _baseMap.Busy ? "rendering" : "pending")}";
 
         // ---------- receive ----------
@@ -134,6 +144,13 @@ namespace RlValheimLink.Server
         private static void OnPayload(long sender, PayloadKind kind, byte[] payload)
         {
             if (!_active) return;
+            if (_worldIdle)
+            {
+                // The client learns once, on its hello, that this world is not linked and sends nothing else this session (design §3).
+                if (kind == PayloadKind.Hello) LinkChannel.SendControl(sender, "reject", $"hello: world '{_worldName}' is not linked to Raid Ledger (Server.WorldAllowlist)");
+                Log.Debug($"peer {sender}: {kind} {(kind == PayloadKind.Hello ? "declined" : "dropped")}, link idle");
+                return;
+            }
             try
             {
                 var facts = sender == GameAccess.OwnRoutedId() ? PeerIdentity.Self(sender) : PeerIdentity.Get(sender);

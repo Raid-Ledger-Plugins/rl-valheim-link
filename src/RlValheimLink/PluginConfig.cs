@@ -13,7 +13,7 @@ namespace RlValheimLink
         public static ConfigEntry<string> SpoolDirectory;
         // [Server]
         public static ConfigEntry<bool> TrustClientSteamId, RequireExactModVersion;
-        public static ConfigEntry<string> ItemsExportBy;
+        public static ConfigEntry<string> ItemsExportBy, WorldAllowlist;
         // [BaseMap]
         public static ConfigEntry<bool> BaseMapEnabled;
         public static ConfigEntry<int> BaseMapRowsPerTick, BaseMapTextureSize;
@@ -23,6 +23,10 @@ namespace RlValheimLink
         public static ConfigEntry<int> MinSecondsBetweenCharacter, MinSecondsBetweenMap;
         // [Items]
         public static ConfigEntry<int> IconSize;
+        // [Chests] — the chest-inventory spike only (docs/design-chests.md §7)
+        public static ConfigEntry<bool> ChestsDumpOnStart;
+        public static ConfigEntry<int> ChestsDumpRuns, ChestsDumpRerunMinutes;
+        public static ConfigEntry<string> ChestsDumpMaterials;
 
         public static void Bind(ConfigFile cfg)
         {
@@ -42,6 +46,7 @@ namespace RlValheimLink
             TrustClientSteamId = cfg.Bind("Server", "TrustClientSteamId", false, "Server only. Accept the client's steamId claim when the peer's socket identity is not a SteamID64 (crossplay/PlayFab). Off = such peers are skipped.");
             RequireExactModVersion = cfg.Bind("Server", "RequireExactModVersion", false, "Server only. Reject clients whose mod version differs from the server's. Off (default): any client speaking the same RPC protocol is accepted and its version is logged, so server-side updates never force a modpack update.");
             ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "admins", new ConfigDescription("Server only. Which clients may produce the items export when asked: admins | anyone | nobody.", new AcceptableValueList<string>("admins", "anyone", "nobody")));
+            WorldAllowlist = cfg.Bind("Server", "WorldAllowlist", "", "Server only. Comma-separated world names (case-insensitive) this server links to Raid Ledger; empty = every world. When the loaded world is not listed the link stays idle: no base map, clients are told the world is not linked, nothing is spooled or uploaded. Set it to your production world when the same server is sometimes booted into a test world.");
 
             BaseMapEnabled = cfg.Bind("BaseMap", "Enabled", true, "Server only. Render the world's base map PNG once per (world, game version).");
             BaseMapRowsPerTick = cfg.Bind("BaseMap", "RowsPerTick", 4, new ConfigDescription("Server only. Rows rendered per Update tick (time-slicing; 2048 rows at 4/tick ≈ 10 s of ticks).", new AcceptableValueRange<int>(1, 256)));
@@ -55,6 +60,11 @@ namespace RlValheimLink
             MinSecondsBetweenMap = cfg.Bind("Client", "MinSecondsBetweenMap", 300, new ConfigDescription("Client only. Throttle for map sends.", new AcceptableValueRange<int>(30, 86400)));
 
             IconSize = cfg.Bind("Items", "IconSize", 64, new ConfigDescription("Client only. Icon edge in pixels for the items atlas (reduced automatically if the PNG would exceed 16 MiB).", new AcceptableValueRange<int>(16, 128)));
+
+            ChestsDumpOnStart = cfg.Bind("Chests", "Dump", true, "Dedicated server only (not single-player or self-hosted worlds). DIAGNOSTIC for the planned chest-inventory capture (docs/design-chests.md §7), on by default: 2 minutes after every start, log what the server can read from every container (lines start 'RLVL: chestdump'). Logs only; uploads nothing, so it also runs on a world that is not in [Server] WorldAllowlist. Set false to skip it. (Replaces DumpOnStart, which is ignored.)");
+            ChestsDumpRuns = cfg.Bind("Chests", "DumpRuns", 2, new ConfigDescription("Dedicated server only. How many dumps to run after each start when Dump is on; every dump after the first also reports what changed since the previous one.", new AcceptableValueRange<int>(1, 6)));
+            ChestsDumpRerunMinutes = cfg.Bind("Chests", "DumpRerunMinutes", 10, new ConfigDescription("Dedicated server only. Minutes between dumps (from the end of one to the start of the next).", new AcceptableValueRange<int>(1, 120)));
+            ChestsDumpMaterials = cfg.Bind("Chests", "DumpMaterials", "Wood,Stone,Resin", "Dedicated server only. Comma-separated item prefab names (up to 5) whose totals over all player-built containers each dump prints, to compare with what you see in the chests.");
         }
     }
 }

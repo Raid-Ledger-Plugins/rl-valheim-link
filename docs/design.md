@@ -128,7 +128,10 @@ ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
 - `hello` (kind 0) is sent once per session after the local player spawns:
   `{ modVersion, gameVersion, modSetHash }`. The server answers `needItems`
   when it has no items export for (`gameVersion`, `modSetHash`) and the
-  client is allowed to export (§9 Q3).
+  client is allowed to export (§9 Q3). A `reject` whose arg starts with
+  `hello: ` declines the whole session (the loaded world is not in
+  `Server.WorldAllowlist`, §8): the client stops capturing until it
+  reconnects; a `reject` without that prefix concerns one transfer.
 
 ## 4. Server enrichment and trust
 
@@ -253,12 +256,16 @@ client a few hundred KB of upload once per changed save.
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
 | `Server.ItemsExportBy` | `admins` | server | who may answer `needItems`: `admins` (adminlist.txt) / `anyone` / `nobody` |
+| `Server.WorldAllowlist` | `` | server | comma-separated world names (case-insensitive, trimmed) this server links; empty = every world. A world not listed leaves the link **idle**: no base map, every `hello` is answered `reject hello: world … is not linked`, nothing is spooled or uploaded. For one server that is sometimes booted into a test world: the character key carries no world, so a test-world session would otherwise become the character's "latest" |
 | `BaseMap.Enabled` | true | server | render the world PNG once per (world, version) |
 | `BaseMap.RowsPerTick` | 8 | server | time-slicing of the render (2048 rows ≈ 5 s of ticks at 50 Hz) |
 | `Client.OptOut` | false | client | **per-player opt-out**: the mod sends nothing from this client |
 | `Client.SendCharacter` / `SendMap` | true | client | finer opt-outs |
 | `Client.MinSecondsBetweenCharacter` / `…Map` | 30 / 300 | client | throttles |
 | `Items.IconSize` | 64 | client | atlas icon edge in px |
+| `Chests.Dump` | true | server | **diagnostic** for the chest-inventory spike (`docs/design-chests.md` §7), on by default (operator ruling: no flags), dedicated servers only (not single-player or self-hosted worlds): 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist` (the link idles there) and without a Raid Ledger target. Replaces `DumpOnStart` (ignored) |
+| `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
+| `Chests.DumpMaterials` | `Wood,Stone,Resin` | server | item prefabs whose totals each dump prints (up to 5) |
 
 ## 9. Open questions for the operator (defaults in bold)
 

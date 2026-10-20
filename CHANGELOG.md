@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.1 — 2026-10-20
+
+- **`[Server] WorldAllowlist`** (comma-separated world names, case-insensitive; empty = every world).
+  When the loaded world is not listed the server half stays idle: no base-map render, every client's
+  hello is answered with `reject hello: world 'x' is not linked …` so a 0.2.1 client sends nothing that
+  session (an older client keeps sending and the server drops it), and nothing is spooled or uploaded.
+  For one dedicated server that is sometimes booted into a test world: the character key has no world
+  in it, so a test-world session would otherwise become the character's latest snapshot in Raid Ledger.
+- Client: a `reject` whose reason starts with `hello: ` now stops the session's captures (older
+  servers never send one).
+- **`[Chests] Dump`** (dedicated server only, default `true`): a diagnostic for the planned chest-inventory
+  capture, on by default (operator ruling: nothing should need a flag; `Dump = false` skips it). Two
+  minutes after every start, the server reads every container from the world's ZDOs with the game's
+  own `Inventory.Load` and logs
+  `RLVL: chestdump[r<run>.c<check>]` lines: the keys on a few known chests (`items` / `itemData` hashes),
+  which data shape and which `Inventory.Load` variant decode a 1.0.20 chest (and whether the temporary
+  inventory avoids instantiating item objects), milliseconds per stack, row counts, counts per prefab
+  (duplicates, creator 0, gone, dropped), totals of `DumpMaterials`, `creator` / `creatorIndex` on personal
+  chests, every container and processing-station prefab with its values, and the 1.0.20-only recipe and
+  station fields. `DumpRuns` (default 2) and `DumpRerunMinutes` (default 10) repeat it and report what
+  changed (freshness). Logs only: no upload, no new message kind, no ZDO string contents in the log;
+  it does log chest positions and the player and Steam ids of chest creators and connected players.
+  Each run (two by default, about 2 and about 12 minutes after start) can cause a short server hitch,
+  longer on large worlds; discovery is spread at one prefab query per tick. It never runs in a
+  player's single-player or self-hosted world.
+  Because it uploads nothing it also runs on a world that is not in `WorldAllowlist` and without a Raid
+  Ledger target. Run 1 logs how long its two single-frame steps took (`setup tick`, `probe tick`).
+- Members that are new in 1.0.20 are read by name through `GameAccess`, so a wrong guess shows up as a
+  dump line, never as a failure of the captures.
+
 ## 0.2.0 — 2026-10-19
 
 Bundled release after the first full in-game runs (operator ruling: fewer, better-tested iterations).

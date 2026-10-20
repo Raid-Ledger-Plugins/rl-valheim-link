@@ -131,6 +131,14 @@ namespace RlValheimLink.Client
                     ItemsCapture.Start(arg);
                     break;
                 case "reject":
+                    if (arg != null && arg.StartsWith("hello: ", StringComparison.Ordinal))
+                    {
+                        // The server declined this session as a whole (e.g. the world is not in its Server.WorldAllowlist): capture nothing more.
+                        _active = false;
+                        ItemsCapture.Cancel();
+                        Log.Warn("server declined this client; nothing is sent this session: " + arg.Substring(7));
+                        break;
+                    }
                     Log.Warn("server rejected a transfer: " + arg);
                     break;
                 case "ack":
