@@ -31,6 +31,67 @@ const validate = ajv.compile(schema);
 export const CAPS = { character: 2_097_152, map: 8_388_608, items: 12_582_912, containers: 10_485_760, recipes: 12_582_912, binary: 16_777_216, bitmapEdgeMax: 4096 };
 export const CAPTURED_AT_MAX_FUTURE_MS = 300_000;
 const bitmapBytes = (w, h) => Math.ceil((w * h) / 8);
+export const CONTAINER_ENTRIES_MAX = 50_000, RECIPE_ENTRIES_MAX = 12_000;
+const INT64_MIN = -(2n ** 63n), INT64_MAX = 2n ** 63n - 1n;
+
+// Zod-only refinements of the containers and recipes kinds (valheim-link-containers.schema.ts,
+// valheim-link-recipes*.schema.ts at the pinned sha): schema.json cannot express them. Each
+// returns the issues Zod would raise, as {path, code}; empty = valid.
+const inInt64 = (v) => { const n = BigInt(v); return n >= INT64_MIN && n <= INT64_MAX; }; // schema.json already enforced the pattern
+function uniquePrefabs(list, at, issues) {
+  const seen = new Set();
+  list.forEach((r, i) => { if (seen.has(r.prefab)) issues.push({ path: `${at}.${i}.prefab`, code: 'custom' }); seen.add(r.prefab); });
+}
+
+export function refineContainers(msg) {
+  const issues = [];
+  if (!inInt64(msg.worldUid)) issues.push({ path: 'worldUid', code: 'custom' });
+  const seen = new Set();
+  let entries = 0;
+  msg.containers.forEach((c, i) => {
+    const at = `containers.${i}`;
+    if (!inInt64(c.creatorPlayerId)) issues.push({ path: `${at}.creatorPlayerId`, code: 'custom' });
+    if (c.creatorPlayerId === '0') issues.push({ path: `${at}.creatorPlayerId`, code: 'custom' });
+    if (c.usedSlots > c.slots) issues.push({ path: `${at}.usedSlots`, code: 'custom' });
+    if (c.unreadable && (c.items.length > 0 || c.usedSlots !== 0)) issues.push({ path: `${at}.items`, code: 'custom' });
+    const stacks = new Set();
+    c.items.forEach((s, j) => { const k = `${s.prefab}@${s.quality}`; if (stacks.has(k)) issues.push({ path: `${at}.items.${j}`, code: 'custom' }); stacks.add(k); });
+    const key = `${c.prefab}|${c.x}|${c.y}|${c.z}|${c.creatorPlayerId}`;
+    if (seen.has(key)) issues.push({ path: at, code: 'custom' });
+    seen.add(key);
+    entries += c.items.length;
+  });
+  if (entries > CONTAINER_ENTRIES_MAX) issues.push({ path: 'containers', code: 'too_big' });
+  return issues;
+}
+
+export function refineRecipes(msg) {
+  const issues = [];
+  msg.recipes.forEach((r, i) => uniquePrefabs(r.resources, `recipes.${i}.resources`, issues));
+  msg.pieces.forEach((p, i) => uniquePrefabs(p.resources, `pieces.${i}.resources`, issues));
+  msg.processes.forEach((p, i) => uniquePrefabs(p.inputs, `processes.${i}.inputs`, issues));
+  uniquePrefabs(msg.stations, 'stations', issues);
+  uniquePrefabs(msg.pieces, 'pieces', issues);
+  uniquePrefabs(msg.processors, 'processors', issues);
+  const ids = new Set();
+  msg.recipes.forEach((r, i) => { if (ids.has(r.id)) issues.push({ path: `recipes.${i}.id`, code: 'custom' }); ids.add(r.id); });
+  const stations = new Set(msg.stations.map((s) => s.prefab));
+  msg.recipes.forEach((r, i) => {
+    for (const field of ['station', 'repairStation']) if (r[field] !== null && !stations.has(r[field])) issues.push({ path: `recipes.${i}.${field}`, code: 'custom' });
+  });
+  msg.pieces.forEach((p, i) => { if (p.station !== null && !stations.has(p.station)) issues.push({ path: `pieces.${i}.station`, code: 'custom' }); });
+  const processors = new Set(msg.processors.map((p) => p.prefab));
+  msg.processes.forEach((p, i) => { if (!processors.has(p.processor)) issues.push({ path: `processes.${i}.processor`, code: 'custom' }); });
+  for (const key of ['stations', 'pieces']) msg[key].forEach((item, i) => {
+    const icon = item.icon;
+    if (!icon) return;
+    if (!msg.atlas) issues.push({ path: 'atlas', code: 'custom' });
+    else if (icon.x + icon.w > msg.atlas.width || icon.y + icon.h > msg.atlas.height) issues.push({ path: `${key}.${i}.icon`, code: 'custom' });
+  });
+  const entries = msg.recipes.reduce((n, r) => n + r.resources.length, 0) + msg.pieces.reduce((n, p) => n + p.resources.length, 0) + msg.processes.reduce((n, p) => n + p.inputs.length, 0);
+  if (entries > RECIPE_ENTRIES_MAX) issues.push({ path: '', code: 'too_big' });
+  return issues;
+}
 
 export function createMock(opts = {}) {
   const tokens = opts.tokens ?? { [process.env.RLVL_MOCK_TOKEN ?? 'mock-token']: process.env.RLVL_MOCK_SERVER_ID ?? 'srv_mock_01' };
@@ -124,6 +185,8 @@ export function createMock(opts = {}) {
       const issues = validate.errors.slice(0, 10).map((e) => ({ path: e.instancePath.replace(/^\//, '').replace(/\//g, '.'), code: e.keyword }));
       return fail(res, 400, 'schema_invalid', 'message does not match the contract', { issues });
     }
+    const refined = msg.kind === 'containers' ? refineContainers(msg) : msg.kind === 'recipes' ? refineRecipes(msg) : [];
+    if (refined.length) return fail(res, 400, 'schema_invalid', 'message does not match the contract', { issues: refined.slice(0, 10) });
     if (msg.kind !== routeKind) return fail(res, 400, 'kind_mismatch', 'body kind does not match the route');
     if (msg.serverId !== serverId) return fail(res, 403, 'server_mismatch', 'serverId does not match the token');
     const at = Date.parse(msg.capturedAt);

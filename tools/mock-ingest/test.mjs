@@ -64,11 +64,63 @@ test('invalid fixtures: 400 schema_invalid / bitmap_invalid, or deferred §6 ref
     const raw = readFileSync(join(golden, 'invalid', name + '.json'));
     let kind; try { kind = kindOf(raw); } catch { kind = 'character'; }
     const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items', 'containers', 'recipes'].includes(kind) ? kind : 'character');
-    if (expected[name].code === 'custom' && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue; // Zod-only refinements: the C# validator covers them
+    const refined = name.startsWith('containers-') || name.startsWith('recipes-');
+    // Zod-only refinements the mock does not implement for the older kinds: the C# validator covers them.
+    if (expected[name].code === 'custom' && !refined && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue;
     assert.equal(r.status, 400, `${name}: ${r.status}`);
     const body = await r.json();
     assert.ok(['schema_invalid', 'bitmap_invalid'].includes(body.code), `${name}: ${body.code}`);
+    // Refinement issues carry Zod's {path, code} (EXPECTED.json names the first; ajv keywords are not Zod codes).
+    if (refined && expected[name].code === 'custom') assert.ok(body.issues.some((i) => i.path === expected[name].path && i.code === 'custom'), `${name}: ${JSON.stringify(body.issues)}`);
   }
+}));
+
+// Rejected with exactly these {path, code} issues on its kind route.
+async function rejects(base, msg, issues, label) {
+  const r = await post(base, JSON.stringify(msg));
+  const body = await r.json();
+  assert.equal(r.status, 400, `${label}: ${JSON.stringify(body)}`);
+  assert.equal(body.code, 'schema_invalid', label);
+  assert.deepEqual(body.issues, issues, label);
+}
+const goldenOf = (f) => JSON.parse(readFileSync(join(golden, f), 'utf8'));
+
+test('containers refinements no fixture covers: int64 range, unreadable usedSlots, 50 000 summed entries', async () => withMock(async (base) => {
+  const ok = goldenOf('containers-basic.json');
+  const edit = (fn) => { const m = structuredClone(ok); fn(m); return m; };
+  await rejects(base, edit((m) => { m.containers[0].creatorPlayerId = '9223372036854775808'; }), [{ path: 'containers.0.creatorPlayerId', code: 'custom' }], 'creator above int64');
+  await rejects(base, edit((m) => { m.worldUid = '-9223372036854775809'; }), [{ path: 'worldUid', code: 'custom' }], 'worldUid below int64');
+  await rejects(base, edit((m) => { Object.assign(m.containers[0], { unreadable: true, items: [], usedSlots: 1 }); }), [{ path: 'containers.0.items', code: 'custom' }], 'unreadable with usedSlots');
+  // 196 × 256 stacks = 50 176 entries, each container under its own 256 cap.
+  const stacks = Array.from({ length: 256 }, (_, j) => ({ prefab: `Item${j}`, quality: 1, stack: 1 }));
+  const big = edit((m) => { m.containers = Array.from({ length: 196 }, (_, i) => ({ ...ok.containers[0], x: i, slots: 256, usedSlots: 256, items: stacks })); });
+  await rejects(base, big, [{ path: 'containers', code: 'too_big' }], 'entries over 50 000');
+  const edge = edit((m) => { m.worldUid = '-9223372036854775808'; m.containers[0].creatorPlayerId = '9223372036854775807'; });
+  const r = await post(base, JSON.stringify(edge)); assert.equal(r.status, 202, 'int64 bounds: ' + await r.text());
+  // Same piece and position but another creator is another container.
+  const twin = edit((m) => { m.containers.push({ ...m.containers[0], creatorPlayerId: '1000000000000002' }); });
+  const r2 = await post(base, JSON.stringify(twin)); assert.equal(r2.status, 202, 'twin by creator: ' + await r2.text());
+}));
+
+test('recipes refinements no fixture covers: piece/processor uniqueness, repairStation, piece resources, station icons, 12 000 entries', async () => withMock(async (base) => {
+  const ok = goldenOf('recipes-vanilla.json');
+  const edit = (fn) => { const m = structuredClone(ok); fn(m); return m; };
+  await rejects(base, edit((m) => { m.pieces.push(m.pieces[0]); }), [{ path: 'pieces.1.prefab', code: 'custom' }], 'duplicate piece');
+  await rejects(base, edit((m) => { m.processors.push(m.processors[0]); }), [{ path: 'processors.1.prefab', code: 'custom' }], 'duplicate processor');
+  await rejects(base, edit((m) => { m.recipes[1].repairStation = 'forge_nope'; }), [{ path: 'recipes.1.repairStation', code: 'custom' }], 'unknown repairStation');
+  await rejects(base, edit((m) => { m.pieces[0].resources.push(m.pieces[0].resources[0]); }), [{ path: 'pieces.0.resources.1.prefab', code: 'custom' }], 'duplicate piece resource');
+  const icon = { kind: 'atlas', x: 0, y: 0, w: 64, h: 64 };
+  await rejects(base, edit((m) => { m.stations[1].icon = icon; }), [{ path: 'atlas', code: 'custom' }], 'station icon without atlas');
+  const atlas = { sha256: 'a'.repeat(64), byteLength: 100, contentType: 'image/png', width: 64, height: 64 };
+  await rejects(base, edit((m) => { m.atlas = atlas; m.stations[1].icon = { ...icon, x: 1 }; }), [{ path: 'stations.1.icon', code: 'custom' }], 'station icon outside atlas');
+  // 750 recipes × 16 resources + 1 piece resource + 1 process input = 12 002 entries.
+  const resources = Array.from({ length: 16 }, (_, j) => ({ ...ok.recipes[1].resources[0], prefab: `Res${j}` }));
+  const big = edit((m) => { m.recipes = Array.from({ length: 750 }, (_, i) => ({ ...ok.recipes[1], id: `Recipe_${i}`, resources })); });
+  await rejects(base, big, [{ path: '', code: 'too_big' }], 'entries over 12 000');
+  big.recipes[0].resources = resources.slice(2); // 12 000 exactly is allowed
+  const r = await post(base, JSON.stringify(big)); assert.equal(r.status, 202, await r.text());
+  const fits = edit((m) => { m.capturedAt = '2026-10-17T20:16:00Z'; m.atlas = atlas; m.stations[1].icon = icon; });
+  const r2 = await post(base, JSON.stringify(fits)); assert.equal(r2.status, 202, await r2.text());
 }));
 
 test('token, serverId, kind route, caps, encodings, rate buckets', async () => withMock(async (base) => {

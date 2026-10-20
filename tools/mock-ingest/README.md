@@ -23,7 +23,9 @@ What it mirrors from the real endpoint (error bodies are `{ code, message }`, pl
 server → 403; body `kind` ≠ route → 400 `kind_mismatch`; `Content-Type` / encoding → 415
 `unsupported_media`; `Content-Encoding: gzip` on messages only, inflated under the kind's §7 cap;
 over the cap (declared or streamed) → 413 `payload_too_large`; `schema.json` via ajv → 400
-`schema_invalid` with `issues: [{ path, code }]`; `capturedAt` > 5 min ahead → 400
+`schema_invalid` with `issues: [{ path, code }]`, plus the Zod-only refinements of `containers` and
+`recipes` (int64 range, uniqueness, station/processor references, atlas icon bounds, summed-entry
+caps) with Zod's paths and codes; `capturedAt` > 5 min ahead → 400
 `captured_at_in_future`; map bitmaps inflated per §6 → 400 `bitmap_invalid`; a ref that differs
 from a stored blob → 400 `blob_ref_mismatch`; latest `capturedAt` wins per key, an older one is
 202 `{ status: "stale" }`; blobs by sha256 (201 `stored` / 200 `exists`) with hash, IHDR and
