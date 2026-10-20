@@ -58,20 +58,17 @@ test("the mod's own fixtures are accepted under their serverId; file-icon blobs 
   }
 }));
 
-test('invalid fixtures: 400 schema_invalid / bitmap_invalid, or deferred §6 refinements', async () => withMock(async (base) => {
+test('invalid fixtures: every one is a 400; Zod-only refinements carry their EXPECTED.json issue', async () => withMock(async (base) => {
   const expected = JSON.parse(readFileSync(join(golden, 'invalid', 'EXPECTED.json'), 'utf8'));
   for (const name of Object.keys(expected)) {
     const raw = readFileSync(join(golden, 'invalid', name + '.json'));
     let kind; try { kind = kindOf(raw); } catch { kind = 'character'; }
     const r = await post(base, raw, {}, TOKEN, ['character', 'map', 'items', 'containers', 'recipes'].includes(kind) ? kind : 'character');
-    const refined = name.startsWith('containers-') || name.startsWith('recipes-');
-    // Zod-only refinements the mock does not implement for the older kinds: the C# validator covers them.
-    if (expected[name].code === 'custom' && !refined && !name.startsWith('map-bitmap') && !name.startsWith('map-basemap')) continue;
     assert.equal(r.status, 400, `${name}: ${r.status}`);
     const body = await r.json();
     assert.ok(['schema_invalid', 'bitmap_invalid'].includes(body.code), `${name}: ${body.code}`);
-    // Refinement issues carry Zod's {path, code} (EXPECTED.json names the first; ajv keywords are not Zod codes).
-    if (refined && expected[name].code === 'custom') assert.ok(body.issues.some((i) => i.path === expected[name].path && i.code === 'custom'), `${name}: ${JSON.stringify(body.issues)}`);
+    // ajv keywords are not Zod codes, so only the refinements (code custom) compare {path, code}.
+    if (expected[name].code === 'custom') assert.ok(body.issues?.some((i) => i.path === expected[name].path && i.code === 'custom'), `${name}: ${JSON.stringify(body)}`);
   }
 }));
 
@@ -121,6 +118,29 @@ test('recipes refinements no fixture covers: piece/processor uniqueness, repairS
   const r = await post(base, JSON.stringify(big)); assert.equal(r.status, 202, await r.text());
   const fits = edit((m) => { m.capturedAt = '2026-10-17T20:16:00Z'; m.atlas = atlas; m.stations[1].icon = icon; });
   const r2 = await post(base, JSON.stringify(fits)); assert.equal(r2.status, 202, await r2.text());
+}));
+
+test('character, map and items refinements no fixture covers', async () => withMock(async (base) => {
+  const edited = (f, fn) => { const m = goldenOf(f); fn(m); return m; };
+  const ch = (fn) => edited('character-eaqs.json', fn);
+  await rejects(base, ch((m) => { m.inventory.items.push(m.inventory.items[0]); }), [{ path: 'inventory.items.5', code: 'custom' }], 'duplicate inventory slot');
+  await rejects(base, ch((m) => { m.skills.push(m.skills[0]); }), [{ path: 'skills.3', code: 'custom' }], 'duplicate skill');
+  await rejects(base, ch((m) => { m.inventory.items[0].item.maxDurability = null; }), [{ path: 'inventory.items.0.item.maxDurability', code: 'custom' }], 'inventory durability half null');
+  await rejects(base, ch((m) => { m.character.worldUid = '9223372036854775808'; }), [{ path: 'character.worldUid', code: 'custom' }], 'worldUid above int64');
+  await rejects(base, ch((m) => { m.inventory.grid.extraRows[1].y = 6; }), [{ path: 'inventory.grid.extraRows.1', code: 'custom' }], 'extra row outside grid');
+  await rejects(base, ch((m) => { m.inventory.grid.extraRows[1].y = 4; }), [{ path: 'inventory.grid.extraRows.1', code: 'custom' }], 'duplicate extra row');
+  const r1 = await post(base, JSON.stringify(ch((m) => { m.character.steamId = '76561197960265728'; }))); assert.equal(r1.status, 202, 'steamId at the individual base: ' + await r1.text());
+
+  const map = (fn) => edited('map-shared-layer.json', fn);
+  await rejects(base, map((m) => { m.character.steamId = '76561197960265727'; }), [{ path: 'character.steamId', code: 'custom' }], 'map steamId below base');
+  await rejects(base, map((m) => { m.character.playerId = '-9223372036854775809'; }), [{ path: 'character.playerId', code: 'custom' }], 'map playerId below int64');
+  await rejects(base, map((m) => { m.explored.data = 'H4sI' + 'A'.repeat(25); }), [{ path: 'explored.data', code: 'custom' }], 'base64 length not a multiple of 4');
+  await rejects(base, map((m) => { m.sharedExplored.width = 1024; }), [{ path: 'sharedExplored', code: 'custom' }], 'shared layer not textureSize square');
+
+  const items = (fn) => edited('items-atlas.json', fn);
+  await rejects(base, items((m) => { m.items.push(m.items[0]); }), [{ path: 'items.4.prefab', code: 'custom' }], 'duplicate item prefab');
+  await rejects(base, items((m) => { m.items[0].icon.x = 961; }), [{ path: 'items.0.icon', code: 'custom' }], 'item icon outside atlas');
+  const r2 = await post(base, JSON.stringify(items((m) => { m.items[0].icon.x = 960; }))); assert.equal(r2.status, 202, 'icon on the atlas edge: ' + await r2.text());
 }));
 
 test('token, serverId, kind route, caps, encodings, rate buckets', async () => withMock(async (base) => {
