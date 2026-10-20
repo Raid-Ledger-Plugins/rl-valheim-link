@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 — 2026-10-20
+
+- Server, chest dump diagnostic: the probe's `rows:` line reports the stack count as the game writes it
+  (`ZPackage.WriteNumItems`), like the probe and totals lines since 0.2.1; it printed the int32 reading
+  (`header count 655360003 vs decoded 3`). Logs only; nothing about uploads changes.
+- Docs: chest-capture design (`docs/design-chests.md`) gains the spike results, the production
+  measurements from 0.2.1 (one prefab pass per tick: busiest tick 1.3 ms on a 361 143-ZDO world) and the
+  Raid Ledger rulings 15–20 with their stories.
+
 ## 0.2.1 — 2026-10-20
 
 - **`[Server] WorldAllowlist`** (comma-separated world names, case-insensitive; empty = every world).
