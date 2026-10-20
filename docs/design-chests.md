@@ -64,9 +64,12 @@ Key decisions, each argued below:
    by Raid Ledger when reading, never by precomputed totals (§3.2).
 9. **Pure logic in `RlValheimLink.Core`**, game reads in
    `src/RlValheimLink/Server` and `Client` (§1.9), per `AGENTS.md`.
-10. **Off by default in the published mod** (`Chests.Enabled = false`): the mod
-    is a public Thunderstore package, so other operators opt in; the
-    GamerSaloon server turns it on.
+10. **On by default, nothing to configure** (operator ruling 6: no flags to
+    set). Chest scanning, the recipes export and everything else in this design
+    work with default settings. `Chests.Enabled` defaults to `true` and exists
+    only to switch scanning off; every other setting is a tuning knob whose
+    default is right. Uploads still need the Raid Ledger settings, so a server
+    without them only spools.
 
 Rough effort: mod ≈ 5.5–7 days including the spike; Raid Ledger ≈ 14.5–17
 days across contract, ingest, importer, read routes, the visibility rule,
@@ -332,8 +335,8 @@ signal under this mod, which is why we never read it.
   checks `PeerFacts.IsAdmin`, allows one forced scan per minute, and starts a
   scan. Older servers drop an unknown kind (`LinkChannel.MaxPayloadBytes`
   returns 0), so no RPC protocol bump is needed.
-- **Spike trigger:** server config `Chests.DumpOnStart` (spike build only)
-  runs the scan once after world load and logs the dump (§7); no RPC needed.
+- **Spike trigger:** the spike build (PR 16) runs the dump two minutes after
+  every start, on by default (`[Chests] Dump`); nothing to configure, no RPC.
 - **Budget:** per tick, at most one `GetAllZDOsWithPrefabIterative` call per
   prefab while discovering, then decoding up to `Chests.StacksPerTick`
   (default 200) stacks; the spike measures milliseconds per stack and sets the
@@ -744,8 +747,9 @@ c.privacy = 'private' AND (
   - the snapshot's age at minute precision ("scanned 4 min ago") and a
     warning when a visible container is `unreadable` or has `omittedEntries`,
     or `omittedShared` is above zero (admins also see `omittedPrivate`);
-  - empty state: "No chest data yet. The server sends it every 10 minutes once
-    chest scanning is on (`Chests.Enabled`)."
+  - empty state: "No chest data yet. The server sends it every 10 minutes; the
+    first arrives a few minutes after it starts." (Only if an operator switched
+    scanning off does it never come.)
   - Item icons reuse `web/src/plugins/valheim/character/item-icon.tsx` and
     `item-tile.tsx`, but `character/use-item-icons.ts` is tied to a character
     and needs a `(serverId, items, atlas)` variant.
@@ -958,8 +962,8 @@ passes; the recipes atlas is listed in `missingBlobs` until uploaded.
 
 ### 6.1 Other stories (outlines for Linear)
 
-- **Mod — spike (first slice, test server only, no upload).** `Chests.DumpOnStart`
-  logs the checks in §7. Done = the operator has run it and the UNVERIFIED items
+- **Mod — spike (first slice, test server only, no upload).** PR 16, on by
+  default, logs the checks in §7. Done = the operator has run it and the UNVERIFIED items
   in §1 are answered in this document.
 - **Raid Ledger — importer, tables and read routes.** `valheim_containers`,
   `valheim_recipe_catalogs`, `valheim_base_names` (§3.1); importer branches;
@@ -1003,7 +1007,7 @@ follow if wanted (§8).
 
 ## 7. Verification plan
 
-- **Spike (test server only, no upload, `Chests.DumpOnStart`):**
+- **Spike (test server only, no upload, on by default in the spike build):**
   1. **Storage:** list every string and byte-array key on one known chest ZDO
      (hashes compared with `"items".GetStableHashCode()` and `"itemData"`),
      §1.2.
@@ -1047,7 +1051,7 @@ follow if wanted (§8).
 
 ## 8. Rulings and open questions
 
-**Operator rulings, 2026-10-19:**
+**Operator rulings, 2026-10-19 and 2026-10-20:**
 
 1. **Visibility: everything is visible.** Base totals, per-chest contents and
    chest positions on the map are shown to everyone who can see the server's
@@ -1063,12 +1067,14 @@ follow if wanted (§8).
 5. **Recipes are included, with processing steps** (smelting, kiln, windmill,
    spinning wheel, refinery, fermenting, cooking, obliterator) in the first
    `recipes` story (§2.2, §5).
+6. **No flags: everything is on by default** (2026-10-20, "I don't want to ever
+   have to set a flag, that should be default"). `Chests.Enabled` defaults to
+   `true` in the published mod; settings exist only to switch something off or
+   tune it (§0 decision 10).
 
 Still open for the operator (proposed default in bold; the work proceeds on
 the default unless overruled):
 
-6. **Which servers.** **The published mod ships `Chests.Enabled = false`; the
-   GamerSaloon server turns it on.**
 7. **Vehicles.** **Count carts and ships, flagged, with a dashboard toggle.**
 8. **Bases.** **Auto-cluster shared chests within 64 m; admins name them by
    placing an anchor.** Or use wards as base boundaries (would need ward

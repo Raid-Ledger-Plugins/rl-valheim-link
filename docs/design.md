@@ -307,7 +307,8 @@ client a few hundred KB of upload once per changed save.
 ## 10. Contract change requests
 
 **Proposed, not filed (2026-10-19):** two new additive kinds, `containers`
-(chest contents per world, scanned by the server every 10 minutes) and
+(chest contents per world, scanned by the server every 10 minutes, on by
+default) and
 `recipes` (crafting recipes, build pieces, stations and processing steps,
 exported by an admin client). Scouting
 design and Linear-ready story drafts: [`design-chests.md`](design-chests.md)
