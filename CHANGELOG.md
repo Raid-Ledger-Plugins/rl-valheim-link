@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 — unreleased
+
+- **`[Server] WorldAllowlist`** (comma-separated world names, case-insensitive; empty = every world).
+  When the loaded world is not listed the server half stays idle: no base-map render, every client's
+  hello is answered with `reject hello: world 'x' is not linked …` so the client sends nothing that
+  session, and nothing is spooled or uploaded. For one dedicated server that is sometimes booted into a
+  test world: the character key has no world in it, so a test-world session would otherwise become the
+  character's latest snapshot in Raid Ledger.
+- Client: a `reject` whose reason starts with `hello: ` now stops the session's captures (older
+  servers never send one).
+
 ## 0.2.0 — 2026-10-19
 
 Bundled release after the first full in-game runs (operator ruling: fewer, better-tested iterations).

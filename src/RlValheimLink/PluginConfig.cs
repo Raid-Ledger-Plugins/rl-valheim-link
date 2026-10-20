@@ -13,7 +13,7 @@ namespace RlValheimLink
         public static ConfigEntry<string> SpoolDirectory;
         // [Server]
         public static ConfigEntry<bool> TrustClientSteamId, RequireExactModVersion;
-        public static ConfigEntry<string> ItemsExportBy;
+        public static ConfigEntry<string> ItemsExportBy, WorldAllowlist;
         // [BaseMap]
         public static ConfigEntry<bool> BaseMapEnabled;
         public static ConfigEntry<int> BaseMapRowsPerTick, BaseMapTextureSize;
@@ -42,6 +42,7 @@ namespace RlValheimLink
             TrustClientSteamId = cfg.Bind("Server", "TrustClientSteamId", false, "Server only. Accept the client's steamId claim when the peer's socket identity is not a SteamID64 (crossplay/PlayFab). Off = such peers are skipped.");
             RequireExactModVersion = cfg.Bind("Server", "RequireExactModVersion", false, "Server only. Reject clients whose mod version differs from the server's. Off (default): any client speaking the same RPC protocol is accepted and its version is logged, so server-side updates never force a modpack update.");
             ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "admins", new ConfigDescription("Server only. Which clients may produce the items export when asked: admins | anyone | nobody.", new AcceptableValueList<string>("admins", "anyone", "nobody")));
+            WorldAllowlist = cfg.Bind("Server", "WorldAllowlist", "", "Server only. Comma-separated world names (case-insensitive) this server links to Raid Ledger; empty = every world. When the loaded world is not listed the link stays idle: no base map, clients are told the world is not linked, nothing is spooled or uploaded. Set it to your production world when the same server is sometimes booted into a test world.");
 
             BaseMapEnabled = cfg.Bind("BaseMap", "Enabled", true, "Server only. Render the world's base map PNG once per (world, game version).");
             BaseMapRowsPerTick = cfg.Bind("BaseMap", "RowsPerTick", 4, new ConfigDescription("Server only. Rows rendered per Update tick (time-slicing; 2048 rows at 4/tick ≈ 10 s of ticks).", new AcceptableValueRange<int>(1, 256)));

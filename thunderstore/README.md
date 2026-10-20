@@ -34,6 +34,12 @@ leaves your PC except through the game server you are playing on.
    server's `adminlist.txt`, `Steam_7656…` format), once per game version and again when the server's
    mod set changes. The server asks the first admin who joins; nothing else is needed. To let any player
    do it, set `[Server] ItemsExportBy = anyone`.
+5. **Test world on the same server:** if you sometimes boot this server into another world (a test
+   world, an event world), set `[Server] WorldAllowlist` to your production world's name, e.g.
+   `WorldAllowlist = Midgard` (several: comma-separated; case does not matter). On any other world the
+   link stays idle — the log says `RLVL: world 'x' not in Server.WorldAllowlist; link idle`, joining
+   clients are told the world is not linked and send nothing, and nothing reaches Raid Ledger. Without
+   it, a character played on the test world becomes that character's latest snapshot on the site.
 
 ## Operations (operator)
 

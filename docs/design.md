@@ -128,7 +128,10 @@ ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
 - `hello` (kind 0) is sent once per session after the local player spawns:
   `{ modVersion, gameVersion, modSetHash }`. The server answers `needItems`
   when it has no items export for (`gameVersion`, `modSetHash`) and the
-  client is allowed to export (§9 Q3).
+  client is allowed to export (§9 Q3). A `reject` whose arg starts with
+  `hello: ` declines the whole session (the loaded world is not in
+  `Server.WorldAllowlist`, §8): the client stops capturing until it
+  reconnects; a `reject` without that prefix concerns one transfer.
 
 ## 4. Server enrichment and trust
 
@@ -253,6 +256,7 @@ client a few hundred KB of upload once per changed save.
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
 | `Server.ItemsExportBy` | `admins` | server | who may answer `needItems`: `admins` (adminlist.txt) / `anyone` / `nobody` |
+| `Server.WorldAllowlist` | `` | server | comma-separated world names (case-insensitive, trimmed) this server links; empty = every world. A world not listed leaves the link **idle**: no base map, every `hello` is answered `reject hello: world … is not linked`, nothing is spooled or uploaded. For one server that is sometimes booted into a test world: the character key carries no world, so a test-world session would otherwise become the character's "latest" |
 | `BaseMap.Enabled` | true | server | render the world PNG once per (world, version) |
 | `BaseMap.RowsPerTick` | 8 | server | time-slicing of the render (2048 rows ≈ 5 s of ticks at 50 Hz) |
 | `Client.OptOut` | false | client | **per-player opt-out**: the mod sends nothing from this client |
