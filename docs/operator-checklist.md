@@ -4,7 +4,7 @@ Numbered, with the exact log lines to expect. Log lines are prefixed `RLVL:` in
 `BepInEx/LogOutput.log` (client: `<game>/BepInEx/LogOutput.log`; server: the Pelican console or
 the same file under the server install). Every secret is masked as `***` by the mod itself.
 
-Before you start: install the zip from the release (or the `RlValheimLink-<sha>` CI artifact) into
+Before you start: install the zip from the release (or the `GamerSaloon-ValheimLink-<sha>` CI artifact) into
 `BepInEx/plugins/RlValheimLink/` on **both** the test server and your client. On the server, set in
 `BepInEx/config/RaidLedger.ValheimLink.cfg`: `BaseUrl`, `ServerToken`, `ServerId`. Until a Raid
 Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server can reach and point
@@ -22,6 +22,9 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
    `RLVL: base map queued for upload (<bytes> bytes)` and, once the uploader runs,
    `RLVL: PUT blob <12 hex>… → 201 stored in <ms> ms`. Paste back the four base-map lines and how long the
    server tick stalled while rendering (watch the console; design §2 says this is UNVERIFIED).
+   From 0.2.1 a dedicated server also logs `RLVL: chestdump: ON (Chests.Dump, default on) — …` and runs
+   the chest diagnostic of section G two minutes after start; set `[Chests] Dump = false` while timing
+   the base map if you want to keep the two apart.
 2. Start your client (modded profile) and join the test world. Client log:
    `RLVL: ZNet up: server=False client=True dedicated=False`
    `RLVL: client half active (sendCharacter=True sendMap=True iconSize=64)`
@@ -95,7 +98,7 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
 - `rlvl status` output.
 - The game version from the title screen and the EAQS version from r2modman.
 
-## G. Chest dump spike (server only; `docs/design-chests.md` §7)
+## G. Chest dump spike (dedicated server only; `docs/design-chests.md` §7)
 
 Answers the UNVERIFIED items of the chest-inventory design before any capture code is written. It
 **logs only**: no upload, no new message kind, nothing changes for clients. Every line starts
@@ -148,7 +151,7 @@ production world.
     two minutes later `RLVL: chestdump[r1] start (run 1 of 2): game=1.0.20 dedicated=True … playersConnected=0 …`,
     then the check lines below, and finally
     `RLVL: chestdump[r1] done in <s> s over <n> ticks` and
-    `RLVL: chestdump: run 2 of 2 in 10 min — move some items in a chest you know before then (freshness check)`.
+    `RLVL: chestdump: run 2 of 2 in 10 min (reports what changed since this run)`.
 14. **Freshness (check 6).** After `chestdump[r1] done`, join (the client lines of step 12 are
     expected) and within the 10 minutes: take exactly 10 Wood out of chest A and put them into chest B;
     open your personal chest; stay next to chest A until
@@ -166,7 +169,7 @@ What each check prints (paste back all of them; step 16):
 
 - **c1 storage:** `RLVL: chestdump[r1.c1] hashes: "items"=<h> ZDOVars.s_items=<h> (same); "itemData"=<h> ZDOVars.s_itemData=<h|missing> (…); "creator"=…; "creatorIndex"=…`,
   `RLVL: chestdump[r1.c1] probes: <n> (<prefabs>)…`, and per probe
-  `RLVL: chestdump[r1.c1.p<n>] keys of <prefab> @(<x>, <y>, <z>) zdoid=… owner=… dataRevision=… persistent=… via ZDOExtraData.GetData (<visibility>): floats=… ints=… longs=… strings=… byteArrays=…`
+  `RLVL: chestdump[r1.c1.p<n>] keys of <prefab> @(<x>, <y>, <z>) zdoid=… owner=… dataRevision=… persistent=… via ZDOExtraData.GetData (<visibility>): floats=… vec3=… quats=… ints=… longs=… strings=… byteArrays=…`
   followed by one `string` / `bytes` / `int` / `long` line per key (`[= "items"]` / `[= "itemData"]` mark the two candidates).
 - **c2 decode:** `RLVL: chestdump[r1.c2] visibility <Type>: <member>=<public|private|missing> …` (the real
   1.0.20 visibility of every member the design relies on); per probe
@@ -174,7 +177,9 @@ What each check prints (paste back all of them; step 16):
   six `loader <variant>: stacks=<n> in <ms> ms (<ms> ms/stack …) itemDrop.Awake=<n> itemDropObjects+=<n> inventory=<w>x<h> maxRow=<n> read=<pos>/<size> bytes …` lines
   (`itemDrop.Awake=0` on an `Inventory(true)` variant = the temporary inventory does not instantiate item
   objects), up to eight `item <prefab> x<stack> q<quality> …` lines, a `rows:` line, and once
-  `RLVL: chestdump[r1.c2] decision: counting with <variant> (…)`.
+  `RLVL: chestdump[r1.c2] decision: counting with <variant> (…)`, and
+  `RLVL: chestdump[r1.c2] probe tick <ms> ms` (with `RLVL: chestdump[r1] setup tick <ms> ms` before c3: how
+  long the two single-frame steps of run 1 held the server).
 - **c3 counts:** `RLVL: chestdump[r1.c3] discovery: <n> container prefabs, … duplicates removed, <ms> ms over <n> ticks (busiest tick <ms> ms …); zdosResident=<n> playersConnected=0`,
   one line per prefab found (`found= unique= duplicates= gone= creator0= counted= empty= unreadable= stacks= dropped= headerMismatch= maxRow= rowsBeyondPrefab= …`),
   `none in this world: …`, `totals with <variant>: … <ms> ms/stack`, `data sources: …`,
@@ -186,7 +191,7 @@ What each check prints (paste back all of them; step 16):
   `creator` should equal that `playerId` (on a linked world also the one in your server line
   `RLVL: peer <uid>: character character|<steamId>|<playerId> …`; on a world outside `WorldAllowlist`
   no character is received, so the `chestdump[r2.c4] peer` line is the reference).
-- **c5 prefabs:** `RLVL: chestdump[r1.c5] Container <prefab>: size=<w>x<h> privacy=<…> buildable=<…> vehicle=<…> …` for every
+- **c5 prefabs:** `RLVL: chestdump[r1.c5] Container <prefab>: size=<w>x<h> privacy=<…> buildable=<…> piece=<…> vehicle=<…> …` for every
   prefab with a Container, `Smelter|Fermenter|CookingStation|Incinerator|CraftingStation <prefab>: …` with
   their values and conversions, and two summary lines.
 - **c6 freshness:** step 14.

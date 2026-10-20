@@ -81,7 +81,9 @@ namespace RlValheimLink
                     ServerHalf.Start();
                     // Log-only diagnostic with its own lifecycle: it runs on a world outside Server.WorldAllowlist
                     // (where ServerHalf idles; a test world is what it is for) and without a Raid Ledger target.
-                    ChestDump.Start();
+                    // Dedicated servers only: it is on by default, and a player's single-player or self-hosted
+                    // world (IsServer too) must not get its run-1 probes or log lines.
+                    if (znet.IsDedicated()) ChestDump.Start();
                 }
                 if (IsClient) ClientHalf.Start();
             }

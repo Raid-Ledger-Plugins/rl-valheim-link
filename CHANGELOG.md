@@ -10,7 +10,7 @@
   in it, so a test-world session would otherwise become the character's latest snapshot in Raid Ledger.
 - Client: a `reject` whose reason starts with `hello: ` now stops the session's captures (older
   servers never send one).
-- **`[Chests] Dump`** (server only, default `true`): a diagnostic for the planned chest-inventory
+- **`[Chests] Dump`** (dedicated server only, default `true`): a diagnostic for the planned chest-inventory
   capture, on by default (operator ruling: nothing should need a flag; `Dump = false` skips it). Two
   minutes after every start, the server reads every container from the world's ZDOs with the game's
   own `Inventory.Load` and logs
@@ -22,9 +22,11 @@
   station fields. `DumpRuns` (default 2) and `DumpRerunMinutes` (default 10) repeat it and report what
   changed (freshness). Logs only: no upload, no new message kind, no ZDO string contents in the log;
   it does log chest positions and the player and Steam ids of chest creators and connected players.
-  The first run can cause one short server hitch two minutes after start.
-  Because it uploads nothing it also runs on a world that is not in `WorldAllowlist` (a test world is
-  where it is meant to run) and without a Raid Ledger target.
+  Each run (two by default, about 2 and about 12 minutes after start) can cause a short server hitch,
+  longer on large worlds; discovery is spread at one prefab query per tick. It never runs in a
+  player's single-player or self-hosted world.
+  Because it uploads nothing it also runs on a world that is not in `WorldAllowlist` and without a Raid
+  Ledger target. Run 1 logs how long its two single-frame steps took (`setup tick`, `probe tick`).
 - Members that are new in 1.0.20 are read by name through `GameAccess`, so a wrong guess shows up as a
   dump line, never as a failure of the captures.
 

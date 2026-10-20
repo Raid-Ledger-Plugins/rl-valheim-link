@@ -97,7 +97,7 @@ namespace RlValheimLink.Server
                 if (_runNumber < _runsTotal)
                 {
                     _nextRunAt = now.AddMinutes(PluginConfig.ChestsDumpRerunMinutes.Value);
-                    Log.Info($"chestdump: run {_runNumber + 1} of {_runsTotal} in {PluginConfig.ChestsDumpRerunMinutes.Value} min — move some items in a chest you know before then (freshness check)");
+                    Log.Info($"chestdump: run {_runNumber + 1} of {_runsTotal} in {PluginConfig.ChestsDumpRerunMinutes.Value} min (reports what changed since this run)");
                 }
                 else
                 {
@@ -117,6 +117,7 @@ namespace RlValheimLink.Server
         {
             string r = "r" + run;
             var total = Stopwatch.StartNew();
+            var setupTick = Stopwatch.StartNew();
             int ticks = 0;
             List<PrefabInfo> prefabs = null;
             Safe(r, "start", () => Header(r, run));
@@ -127,9 +128,11 @@ namespace RlValheimLink.Server
                 Safe(r + ".c5", "station scan", () => Stations(r));
                 Safe(r + ".c7", "1.0.20 fields", () => NewFields(r));
             }
+            Log.Info($"chestdump[{r}] setup tick {Ms(setupTick.Elapsed.TotalMilliseconds)} ms");
             yield return null; ticks++;
 
-            // c3 discovery: every container prefab, one GetAllZDOsWithPrefabIterative call per prefab per tick.
+            // c3 discovery: every container prefab, one GetAllZDOsWithPrefabIterative call per tick, prefab by
+            // prefab (the spike measured all 64 prefab passes in one tick, too much for a live world).
             // The ids are taken right after each call (ZDOs are pooled; a ZDO object can be reused later).
             int discoveryTicks = 0; double discoveryMaxTick = 0;
             var discovery = Stopwatch.StartNew();
@@ -151,6 +154,7 @@ namespace RlValheimLink.Server
                     }
                     p.Found.Clear();
                     if (++p.Calls >= MaxCallsPerPrefab && !p.Done) { p.Done = true; Log.Warn($"chestdump[{r}.c3] discovery {p.Name}: gave up after {p.Calls} calls"); }
+                    break;
                 }
                 discoveryMaxTick = Math.Max(discoveryMaxTick, tick.Elapsed.TotalMilliseconds);
                 discoveryTicks++;
@@ -161,8 +165,10 @@ namespace RlValheimLink.Server
             // c1 + c2 probes (first run): every key on a few known chests, every decode variant on them.
             if (run == 1)
             {
+                var probeTick = Stopwatch.StartNew();
                 Safe(r + ".c2", "member visibility", () => Visibility(r));
                 Safe(r + ".c2", "probes", () => Probes(r, prefabs));
+                Log.Info($"chestdump[{r}.c2] probe tick {Ms(probeTick.Elapsed.TotalMilliseconds)} ms");
                 yield return null; ticks++;
             }
             var loader = Loaders().FirstOrDefault(l => l.Name == _chosenLoader) ?? Loaders()[1];
