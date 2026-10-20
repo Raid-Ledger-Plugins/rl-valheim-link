@@ -26,20 +26,20 @@ namespace RlValheimLink.Contract
     /// </summary>
     public static class Validator
     {
-        private static readonly Regex ServerId = new Regex("^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex GameVersion = new Regex(@"^\d{1,4}(\.\d{1,5}){1,3}$", RegexOptions.CultureInvariant);
-        private static readonly Regex SemVer = new Regex(@"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$", RegexOptions.CultureInvariant);
-        private static readonly Regex IsoDateTime = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z$", RegexOptions.CultureInvariant);
-        private static readonly Regex SteamId = new Regex(@"^[1-9]\d{16}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Int64 = new Regex(@"^(0|-?[1-9]\d{0,18})$", RegexOptions.CultureInvariant);
-        private static readonly Regex Prefab = new Regex("^[A-Za-z0-9_.-]{1,96}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Sha256 = new Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex SkillId = new Regex("^-?[A-Za-z0-9_]{1,64}$", RegexOptions.CultureInvariant);
-        private static readonly Regex PinType = new Regex("^[A-Za-z0-9_]{1,32}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Category = new Regex("^[A-Za-z0-9_]{1,48}$", RegexOptions.CultureInvariant);
-        private static readonly Regex Locale = new Regex("^[A-Za-z_-]{2,32}$", RegexOptions.CultureInvariant);
-        private static readonly Regex IconFile = new Regex(@"^[A-Za-z0-9_.-]{1,100}\.png$", RegexOptions.CultureInvariant);
-        private static readonly Regex BitmapData = new Regex("^H4sI[A-Za-z0-9+/]*={0,2}$", RegexOptions.CultureInvariant);
+        private static readonly Regex ServerId = new Regex(@"^[A-Za-z0-9_-]{1,64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex GameVersion = new Regex(@"^\d{1,4}(\.\d{1,5}){1,3}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SemVer = new Regex(@"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z", RegexOptions.CultureInvariant);
+        private static readonly Regex IsoDateTime = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SteamId = new Regex(@"^[1-9]\d{16}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Int64 = new Regex(@"^(0|-?[1-9]\d{0,18})\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Prefab = new Regex(@"^[A-Za-z0-9_.-]{1,96}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Sha256 = new Regex(@"^[0-9a-f]{64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex SkillId = new Regex(@"^-?[A-Za-z0-9_]{1,64}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex PinType = new Regex(@"^[A-Za-z0-9_]{1,32}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Category = new Regex(@"^[A-Za-z0-9_]{1,48}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex Locale = new Regex(@"^[A-Za-z_-]{2,32}\z", RegexOptions.CultureInvariant);
+        private static readonly Regex IconFile = new Regex(@"^[A-Za-z0-9_.-]{1,100}\.png\z", RegexOptions.CultureInvariant);
+        private static readonly Regex BitmapData = new Regex(@"^H4sI[A-Za-z0-9+/]*={0,2}\z", RegexOptions.CultureInvariant);
 
         private static readonly BigInteger SteamMin = BigInteger.Parse(Caps.SteamId64Min, CultureInfo.InvariantCulture);
         private static readonly BigInteger I64Min = BigInteger.Parse(Caps.Int64Min, CultureInfo.InvariantCulture);
@@ -84,18 +84,16 @@ namespace RlValheimLink.Contract
         private static void Header(JObject o, List<ValidationIssue> issues)
         {
             var sv = o["schemaVersion"];
-            if (sv == null || sv.Type != JTokenType.Integer && sv.Type != JTokenType.Float)
-                issues.Add(new ValidationIssue("schemaVersion", "invalid_type", "expected number"));
-            else if ((double)sv != Caps.SchemaVersion)
+            if (sv == null || sv.Type != JTokenType.Integer && sv.Type != JTokenType.Float || (double)sv != Caps.SchemaVersion)
                 issues.Add(new ValidationIssue("schemaVersion", "invalid_value", "schemaVersion must be 1"));
 
-            Str(o, "serverId", "", issues, 1, 64, ServerId);
+            Str(o, "serverId", "", issues, 0, null, ServerId);
             if (Str(o, "capturedAt", "", issues, 1, null, null, out string ts))
             {
                 if (!IsoDateTime.IsMatch(ts)) issues.Add(new ValidationIssue("capturedAt", "invalid_format", "ISO-8601 UTC with Z"));
                 if (ts.Length > Caps.TimestampMaxChars) issues.Add(new ValidationIssue("capturedAt", "too_big", "at most 3 fractional digits"));
             }
-            Str(o, "gameVersion", "", issues, 1, null, GameVersion);
+            Str(o, "gameVersion", "", issues, 0, null, GameVersion);
             if (Str(o, "modVersion", "", issues, 1, null, null, out string mv))
             {
                 if (mv.Length > 64) issues.Add(new ValidationIssue("modVersion", "too_big", "at most 64 chars"));
@@ -201,7 +199,7 @@ namespace RlValheimLink.Contract
                     string p = "skills." + i;
                     if (!ObjAt(skills[i], p, issues, out JObject s)) continue;
                     Keys(s, p, issues, "id", "level", "accumulator");
-                    if (Str(s, "id", p, issues, 1, null, SkillId, out string id))
+                    if (Str(s, "id", p, issues, 0, null, SkillId, out string id))
                         if (!seen.Add(id)) issues.Add(new ValidationIssue(p, "custom", "duplicate skills entry"));
                     Num(s, "level", p, issues, 0, 100);
                     Num(s, "accumulator", p, issues, 0, 1_000_000);
@@ -216,7 +214,7 @@ namespace RlValheimLink.Contract
         private static void ItemStack(JObject item, string path, List<ValidationIssue> issues)
         {
             Keys(item, path, issues, "prefab", "stack", "quality", "variant", "durability", "maxDurability");
-            Str(item, "prefab", path, issues, 1, 96, Prefab);
+            Str(item, "prefab", path, issues, 0, null, Prefab);
             Int(item, "stack", path, issues, 1, 100_000, out _);
             Int(item, "quality", path, issues, 1, 10, out _);
             Int(item, "variant", path, issues, 0, 63, out _);
@@ -264,7 +262,7 @@ namespace RlValheimLink.Contract
                     string p = "pins." + i;
                     if (!ObjAt(pins[i], p, issues, out JObject pin)) continue;
                     Keys(pin, p, issues, "type", "label", "x", "z", "checked", "shared");
-                    Str(pin, "type", p, issues, 1, 32, PinType);
+                    Str(pin, "type", p, issues, 0, null, PinType);
                     Str(pin, "label", p, issues, 0, 64, null);
                     Num(pin, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
                     Num(pin, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
@@ -285,8 +283,7 @@ namespace RlValheimLink.Contract
         private static void Bitmap(JObject b, string path, List<ValidationIssue> issues, int textureSize)
         {
             Keys(b, path, issues, "encoding", "width", "height", "data");
-            if (Str(b, "encoding", path, issues, 1, null, null, out string enc) && enc != ExploredBitmap.EncodingName)
-                issues.Add(new ValidationIssue(path + ".encoding", "invalid_value", "encoding must be " + ExploredBitmap.EncodingName));
+            Literal(b, "encoding", path, issues, ExploredBitmap.EncodingName);
             bool wOk = Int(b, "width", path, issues, Caps.BitmapEdgeMin, Caps.BitmapEdgeMax, out int w);
             bool hOk = Int(b, "height", path, issues, Caps.BitmapEdgeMin, Caps.BitmapEdgeMax, out int h);
             if (Str(b, "data", path, issues, 0, null, null, out string data))
@@ -306,10 +303,9 @@ namespace RlValheimLink.Contract
         private static bool BinaryRef(JObject b, string path, List<ValidationIssue> issues, out int w, out int h)
         {
             Keys(b, path, issues, "sha256", "byteLength", "contentType", "width", "height");
-            Str(b, "sha256", path, issues, 1, null, Sha256);
+            Str(b, "sha256", path, issues, 0, null, Sha256);
             Int(b, "byteLength", path, issues, 1, Caps.BinaryMaxBytes, out _);
-            if (Str(b, "contentType", path, issues, 1, null, null, out string ct) && ct != "image/png")
-                issues.Add(new ValidationIssue(path + ".contentType", "invalid_value", "contentType must be image/png"));
+            Literal(b, "contentType", path, issues, "image/png");
             bool wOk = Int(b, "width", path, issues, 1, Caps.BinaryEdgeMax, out w);
             bool hOk = Int(b, "height", path, issues, 1, Caps.BinaryEdgeMax, out h);
             return wOk && hOk;
@@ -319,7 +315,7 @@ namespace RlValheimLink.Contract
         {
             Keys(o, "", issues, HeaderKeys, "locale", "atlas", "items");
             Header(o, issues);
-            Str(o, "locale", "", issues, 2, 32, Locale);
+            Str(o, "locale", "", issues, 0, null, Locale);
 
             bool hasAtlas = false; int aw = 0, ah = 0;
             var atlas = o["atlas"];
@@ -338,10 +334,10 @@ namespace RlValheimLink.Contract
                     string p = "items." + i;
                     if (!ObjAt(items[i], p, issues, out JObject it)) continue;
                     Keys(it, p, issues, "prefab", "name", "category", "maxStack", "maxQuality", "variants", "icon");
-                    if (Str(it, "prefab", p, issues, 1, 96, Prefab, out string prefab))
+                    if (Str(it, "prefab", p, issues, 0, null, Prefab, out string prefab))
                         if (!seen.Add(prefab)) issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate prefab"));
                     Str(it, "name", p, issues, 1, 96, null);
-                    Str(it, "category", p, issues, 1, 48, Category);
+                    Str(it, "category", p, issues, 0, null, Category);
                     Int(it, "maxStack", p, issues, 1, 100_000, out _);
                     Int(it, "maxQuality", p, issues, 1, 10, out _);
                     Int(it, "variants", p, issues, 0, 64, out _);
@@ -366,7 +362,7 @@ namespace RlValheimLink.Contract
                     else if (ik == "file")
                     {
                         Keys(ic, ip, issues, "kind", "file", "blob");
-                        Str(ic, "file", ip, issues, 5, 104, IconFile);
+                        Str(ic, "file", ip, issues, 0, null, IconFile);
                         var blob = ic["blob"];
                         if (blob != null && ObjAt(blob, ip + ".blob", issues, out JObject bl)) BinaryRef(bl, ip + ".blob", issues, out _, out _);
                     }
@@ -394,7 +390,7 @@ namespace RlValheimLink.Contract
                     string p = "containers." + i;
                     if (!ObjAt(containers[i], p, issues, out JObject c)) continue;
                     Keys(c, p, issues, "prefab", "x", "y", "z", "creatorPlayerId", "privacy", "vehicle", "slots", "usedSlots", "unreadable", "omittedEntries", "items");
-                    bool prefabOk = Str(c, "prefab", p, issues, 1, 96, Prefab, out string prefab);
+                    bool prefabOk = Str(c, "prefab", p, issues, 0, null, Prefab, out string prefab);
                     bool xOk = Num(c, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double x);
                     bool yOk = Num(c, "y", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double y);
                     bool zOk = Num(c, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double z);
@@ -416,7 +412,7 @@ namespace RlValheimLink.Contract
                             string sp = p + ".items." + j;
                             if (!ObjAt(stacks[j], sp, issues, out JObject s)) continue;
                             Keys(s, sp, issues, "prefab", "quality", "stack");
-                            bool sPrefabOk = Str(s, "prefab", sp, issues, 1, 96, Prefab, out string stackPrefab);
+                            bool sPrefabOk = Str(s, "prefab", sp, issues, 0, null, Prefab, out string stackPrefab);
                             bool qualityOk = Int(s, "quality", sp, issues, 1, 10, out int quality);
                             Int(s, "stack", sp, issues, 1, 1_000_000_000, out _);
                             if (sPrefabOk && qualityOk && !seenStacks.Add(stackPrefab + "@" + quality.ToString(CultureInfo.InvariantCulture)))
@@ -446,7 +442,7 @@ namespace RlValheimLink.Contract
         {
             Keys(o, "", issues, HeaderKeys, "locale", "atlas", "stations", "recipes", "pieces", "processors", "processes");
             Header(o, issues);
-            Str(o, "locale", "", issues, 2, 32, Locale);
+            Str(o, "locale", "", issues, 0, null, Locale);
 
             bool hasAtlas = false; int aw = 0, ah = 0;
             var atlas = o["atlas"];
@@ -466,7 +462,7 @@ namespace RlValheimLink.Contract
                     string p = "stations." + i;
                     if (!ObjAt(stationList[i], p, issues, out JObject s)) continue;
                     Keys(s, p, issues, "prefab", "name", "maxLevel", "stackableExtension", "upgrader", "icon");
-                    if (Str(s, "prefab", p, issues, 1, 96, Prefab, out string prefab) && !stations.Add(prefab))
+                    if (Str(s, "prefab", p, issues, 0, null, Prefab, out string prefab) && !stations.Add(prefab))
                         issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate stations prefab"));
                     Str(s, "name", p, issues, 1, 96, null);
                     Int(s, "maxLevel", p, issues, 1, Caps.StationLevelMax, out _);
@@ -486,7 +482,7 @@ namespace RlValheimLink.Contract
                     Keys(r, p, issues, "id", "result", "amount", "enabled", "station", "repairStation", "minStationLevel", "upgradeOnly", "anyOneOf", "qualityResultAmountMultiplier", "formula", "resources");
                     if (Str(r, "id", p, issues, 0, null, Prefab, out string id) && !ids.Add(id))
                         issues.Add(new ValidationIssue(p + ".id", "custom", "duplicate recipe id"));
-                    Str(r, "result", p, issues, 1, 96, Prefab);
+                    Str(r, "result", p, issues, 0, null, Prefab);
                     Int(r, "amount", p, issues, 1, 10_000, out _);
                     Bool(r, "enabled", p, issues);
                     StationRef(r, "station", p, issues, stations);
@@ -508,11 +504,11 @@ namespace RlValheimLink.Contract
                     string p = "pieces." + i;
                     if (!ObjAt(pieces[i], p, issues, out JObject pc)) continue;
                     Keys(pc, p, issues, "prefab", "name", "category", "tool", "station", "icon", "resources");
-                    if (Str(pc, "prefab", p, issues, 1, 96, Prefab, out string prefab) && !seen.Add(prefab))
+                    if (Str(pc, "prefab", p, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
                         issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate pieces prefab"));
                     Str(pc, "name", p, issues, 1, 96, null);
-                    Str(pc, "category", p, issues, 1, 48, Category);
-                    Str(pc, "tool", p, issues, 1, 96, Prefab);
+                    Str(pc, "category", p, issues, 0, null, Category);
+                    Str(pc, "tool", p, issues, 0, null, Prefab);
                     StationRef(pc, "station", p, issues, stations);
                     AtlasIcon(pc, p, issues, icons);
                     entries += Resources(pc, p, issues, false);
@@ -527,7 +523,7 @@ namespace RlValheimLink.Contract
                     string p = "processors." + i;
                     if (!ObjAt(processorList[i], p, issues, out JObject pr)) continue;
                     Keys(pr, p, issues, "prefab", "type", "fuel", "fuelPerProduct", "fuelSecondsPerUnit", "windPowered", "requiresRoof", "maxInput", "burntResult", "defaultResult");
-                    if (Str(pr, "prefab", p, issues, 1, 96, Prefab, out string prefab) && !processors.Add(prefab))
+                    if (Str(pr, "prefab", p, issues, 0, null, Prefab, out string prefab) && !processors.Add(prefab))
                         issues.Add(new ValidationIssue(p + ".prefab", "custom", "duplicate processors prefab"));
                     Enum(pr, "type", p, issues, ProcessorTypes, out _);
                     NullablePrefab(pr, "fuel", p, issues, out _);
@@ -542,7 +538,7 @@ namespace RlValheimLink.Contract
                     else if (dr.Type != JTokenType.Null && ObjAt(dr, p + ".defaultResult", issues, out JObject d))
                     {
                         Keys(d, p + ".defaultResult", issues, "prefab", "perInputs");
-                        Str(d, "prefab", p + ".defaultResult", issues, 1, 96, Prefab);
+                        Str(d, "prefab", p + ".defaultResult", issues, 0, null, Prefab);
                         Int(d, "perInputs", p + ".defaultResult", issues, 1, 10_000, out _);
                     }
                 }
@@ -555,7 +551,7 @@ namespace RlValheimLink.Contract
                     string p = "processes." + i;
                     if (!ObjAt(processes[i], p, issues, out JObject pr)) continue;
                     Keys(pr, p, issues, "processor", "inputs", "anyOneOf", "output", "seconds", "priority");
-                    if (Str(pr, "processor", p, issues, 1, 96, Prefab, out string processor) && !processors.Contains(processor))
+                    if (Str(pr, "processor", p, issues, 0, null, Prefab, out string processor) && !processors.Contains(processor))
                         issues.Add(new ValidationIssue(p + ".processor", "custom", "unknown processor"));
                     if (Arr(pr, "inputs", p, issues, 1, Caps.ProcessInputsMax, out JArray inputs))
                     {
@@ -566,7 +562,7 @@ namespace RlValheimLink.Contract
                             string ip = p + ".inputs." + j;
                             if (!ObjAt(inputs[j], ip, issues, out JObject inp)) continue;
                             Keys(inp, ip, issues, "prefab", "amount");
-                            if (Str(inp, "prefab", ip, issues, 1, 96, Prefab, out string prefab) && !seen.Add(prefab))
+                            if (Str(inp, "prefab", ip, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
                                 issues.Add(new ValidationIssue(ip + ".prefab", "custom", "duplicate input prefab"));
                             Int(inp, "amount", ip, issues, 1, 10_000, out _);
                         }
@@ -575,7 +571,7 @@ namespace RlValheimLink.Contract
                     if (Obj(pr, "output", p, issues, out JObject output))
                     {
                         Keys(output, p + ".output", issues, "prefab", "amount");
-                        Str(output, "prefab", p + ".output", issues, 1, 96, Prefab);
+                        Str(output, "prefab", p + ".output", issues, 0, null, Prefab);
                         Int(output, "amount", p + ".output", issues, 1, 10_000, out _);
                     }
                     NullableNum(pr, "seconds", p, issues, 0, 604_800);
@@ -601,8 +597,7 @@ namespace RlValheimLink.Contract
             if (!ObjAt(icon, ip, issues, out JObject ic)) return;
             atlas.Any = true;
             Keys(ic, ip, issues, "kind", "x", "y", "w", "h");
-            if (Str(ic, "kind", ip, issues, 0, null, null, out string kind) && kind != "atlas")
-                issues.Add(new ValidationIssue(ip + ".kind", "invalid_value", "icon kind must be atlas"));
+            Literal(ic, "kind", ip, issues, "atlas");
             bool xo = Int(ic, "x", ip, issues, 0, 16_383, out int x);
             bool yo = Int(ic, "y", ip, issues, 0, 16_383, out int y);
             bool wo = Int(ic, "w", ip, issues, 1, 512, out int w);
@@ -622,7 +617,7 @@ namespace RlValheimLink.Contract
                 if (!ObjAt(list[j], rp, issues, out JObject res)) continue;
                 if (recipe) Keys(res, rp, issues, "prefab", "amount", "amountPerLevel", "extraAmountOnlyOneIngredient", "recover", "upgraderResource");
                 else Keys(res, rp, issues, "prefab", "amount", "recover");
-                if (Str(res, "prefab", rp, issues, 1, 96, Prefab, out string prefab) && !seen.Add(prefab))
+                if (Str(res, "prefab", rp, issues, 0, null, Prefab, out string prefab) && !seen.Add(prefab))
                     issues.Add(new ValidationIssue(rp + ".prefab", "custom", "duplicate resources prefab"));
                 Int(res, "amount", rp, issues, 0, 10_000, out _);
                 if (recipe)
@@ -712,13 +707,18 @@ namespace RlValheimLink.Contract
             return ok;
         }
 
+        /// <summary>Zod 4 enum / literal: anything that is not one of the values (missing, another type, another string) is invalid_value.</summary>
         private static bool Enum(JObject parent, string key, string path, List<ValidationIssue> issues, string[] values, out string value)
         {
-            if (!Str(parent, key, path, issues, 0, null, null, out value)) return false;
-            if (Array.IndexOf(values, value) >= 0) return true;
+            var t = parent[key];
+            value = t != null && t.Type == JTokenType.String ? (string)t : null;
+            if (value != null && Array.IndexOf(values, value) >= 0) return true;
             issues.Add(new ValidationIssue(Join(path, key), "invalid_value", "one of " + string.Join("|", values)));
             return false;
         }
+
+        private static bool Literal(JObject parent, string key, string path, List<ValidationIssue> issues, string expected) =>
+            Enum(parent, key, path, issues, new[] { expected }, out _);
 
         private static bool Bool(JObject parent, string key, string path, List<ValidationIssue> issues) =>
             Bool(parent, key, path, issues, out _);
@@ -746,7 +746,7 @@ namespace RlValheimLink.Contract
             var t = parent[key];
             if (t == null) { issues.Add(new ValidationIssue(Join(path, key), "invalid_type", "required (nullable)")); return false; }
             if (t.Type == JTokenType.Null) return true;
-            return Str(parent, key, path, issues, 1, 96, Prefab, out value);
+            return Str(parent, key, path, issues, 0, null, Prefab, out value);
         }
 
         private static void NullableInt(JObject parent, string key, string path, List<ValidationIssue> issues, long min, long max)
