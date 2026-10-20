@@ -115,7 +115,8 @@ production world.
     stay on the pack's version (same RPC protocol). In the server's
     `BepInEx/config/RaidLedger.ValheimLink.cfg` set, under `[Server]`,
     `WorldAllowlist = <production world>` (add the line by hand if the file was written by an older
-    version; edit the file in place, it holds the token). Leave `[Chests] DumpOnStart = false` for now.
+    version; edit the file in place, it holds the token). The chest dump is on by default, so this first
+    start also runs it two minutes in; with no test chests built yet, that run can be ignored.
     **Silence Uptime Kuma, then start the server on the test world.** Never start or restart without it:
     pause the server's Kuma monitor first (a Kuma maintenance window, or a power action with monitors
     suppressed), or Discord gets DOWN/UP posts. Expect
@@ -138,28 +139,28 @@ production world.
     - optional: a cart with items in it (vehicles are counted separately).
     Then wait for a world save (the server logs one every `-saveinterval`, or type `save` in the F5
     console as an admin) and log out.
-13. **Turn the dump on and restart.** In the same config file, under `[Chests]` (the first 0.2.1 start
-    wrote it with defaults; add it by hand if it is missing), set `DumpOnStart = true` and, if you used
-    other materials in step 12, `DumpMaterials = <A>,<B>,<C>` (item prefab names, e.g.
-    `Wood,Stone,Resin`). Leave `DumpRuns = 2` and `DumpRerunMinutes = 10`. Silence Uptime Kuma again,
-    then restart. **Do not join for the first two minutes**, so the first dump reads every chest before
-    any player has loaded its area. Expect the two lines of step 11, then
-    `RLVL: chestdump: ON (Chests.DumpOnStart) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
+13. **Restart for the real run.** Nothing to configure: the dump is on by default
+    (`[Chests] Dump = true`). Only if you used other materials in step 12, set
+    `DumpMaterials = <A>,<B>,<C>` in the same config file (item prefab names, e.g. `Wood,Stone,Resin`).
+    Silence Uptime Kuma again, then restart. **Do not join for the first two minutes**, so the first
+    dump reads every chest before any player has loaded its area. Expect the two lines of step 11, then
+    `RLVL: chestdump: ON (Chests.Dump, default on) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
     two minutes later `RLVL: chestdump[r1] start (run 1 of 2): game=1.0.20 dedicated=True … playersConnected=0 …`,
     then the check lines below, and finally
     `RLVL: chestdump[r1] done in <s> s over <n> ticks` and
     `RLVL: chestdump: run 2 of 2 in 10 min — move some items in a chest you know before then (freshness check)`.
 14. **Freshness (check 6).** After `chestdump[r1] done`, join (the client lines of step 12 are
-    expected) and within the 10 minutes: take exactly 10 Wood out of chest A and put them into chest B; open your personal chest; stay next to chest A until
+    expected) and within the 10 minutes: take exactly 10 Wood out of chest A and put them into chest B;
+    open your personal chest; stay next to chest A until
     `RLVL: chestdump[r2] done …` appears, then you may log out. Expect
     `RLVL: chestdump[r2.c6] since the previous run (<m> min ago): changed=2 unchanged=<n> added=0 removed=0 …`,
     `RLVL: chestdump[r2.c6] changed piece_chest_wood @(<x>, <y>, <z>): Wood q1 50→40` (and the same for B),
     `RLVL: chestdump[r2.c6] materials since the previous run: Wood <a>→<a>, …` (moving between two shared
     chests leaves the total unchanged) and a key list of each changed chest (what a 1.0.20 client writes).
     Also note whether the game stuttered for you while run 2 was going (it logs its busiest tick).
-15. **Afterwards:** set `DumpOnStart = false` (it only acts at start, so no restart is needed now; it would
-    run again on the next start). Lift the Kuma silencing as you normally would once you are done with
-    the server.
+15. **Afterwards:** nothing to switch off. The dump runs again two minutes after every start (logs
+    only); `[Chests] Dump = false` skips it. Lift the Kuma silencing as you normally would once you are
+    done with the server.
 
 What each check prints (paste back all of them; step 16):
 

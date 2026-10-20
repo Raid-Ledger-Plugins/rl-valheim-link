@@ -51,6 +51,9 @@ leaves your PC except through the game server you are playing on.
   character and map data re-send on their next save.
 - **Switching worlds:** the base map is rendered once per world and game version (about 20 s of server
   ticks on first load) and cached under `BepInEx/RLValheimLink/spool/basemap/`.
+- **Chest diagnostic (on by default):** two minutes after every start the server logs
+  `RLVL: chestdump` lines about every chest (counts, positions, item names, creator ids). It uploads
+  nothing, and its first run can cause one short hitch. `[Chests] Dump = false` skips it.
 - `rlvl status` in a client's F5 console (launch option `-console`) prints what the mod is doing.
 
 ## Privacy

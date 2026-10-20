@@ -263,7 +263,7 @@ client a few hundred KB of upload once per changed save.
 | `Client.SendCharacter` / `SendMap` | true | client | finer opt-outs |
 | `Client.MinSecondsBetweenCharacter` / `…Map` | 30 / 300 | client | throttles |
 | `Items.IconSize` | 64 | client | atlas icon edge in px |
-| `Chests.DumpOnStart` | false | server | **diagnostic** for the chest-inventory spike (`docs/design-chests.md` §7): 2 min after world load, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist` (the link idles there) and without a Raid Ledger target |
+| `Chests.Dump` | true | server | **diagnostic** for the chest-inventory spike (`docs/design-chests.md` §7), on by default (operator ruling: no flags): 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist` (the link idles there) and without a Raid Ledger target. Replaces `DumpOnStart` (ignored) |
 | `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
 | `Chests.DumpMaterials` | `Wood,Stone,Resin` | server | item prefabs whose totals each dump prints (up to 5) |
 
