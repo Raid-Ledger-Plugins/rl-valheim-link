@@ -4,10 +4,10 @@
 
 - **`[Server] WorldAllowlist`** (comma-separated world names, case-insensitive; empty = every world).
   When the loaded world is not listed the server half stays idle: no base-map render, every client's
-  hello is answered with `reject hello: world 'x' is not linked …` so the client sends nothing that
-  session, and nothing is spooled or uploaded. For one dedicated server that is sometimes booted into a
-  test world: the character key has no world in it, so a test-world session would otherwise become the
-  character's latest snapshot in Raid Ledger.
+  hello is answered with `reject hello: world 'x' is not linked …` so a 0.2.1 client sends nothing that
+  session (an older client keeps sending and the server drops it), and nothing is spooled or uploaded.
+  For one dedicated server that is sometimes booted into a test world: the character key has no world
+  in it, so a test-world session would otherwise become the character's latest snapshot in Raid Ledger.
 - Client: a `reject` whose reason starts with `hello: ` now stops the session's captures (older
   servers never send one).
 - **`[Chests] DumpOnStart`** (server only, default `false`): a diagnostic for the planned chest-inventory

@@ -107,7 +107,26 @@ any world, also one that is **not** in `[Server] WorldAllowlist`: there the rest
 Raid Ledger) and the dump still runs. So run it on the test world and leave `WorldAllowlist` set to the
 production world.
 
-11. **Build the test chests (once, in the test world, as an admin with your normal client).** Place and
+11. **Install 0.2.1 or later on the server and link only the production world, before the test world
+    is booted with it.** Released: the DLLs of the Thunderstore package. Before the release: from the
+    PR's checks, open the `build` job's run, download the artifact `GamerSaloon-ValheimLink-<sha>`, unzip
+    it (it contains the Thunderstore zip; unzip that too) and copy the three DLLs from
+    `plugins/RlValheimLink/` over the ones in the server's `BepInEx/plugins/RlValheimLink/`. Clients may
+    stay on the pack's version (same RPC protocol). In the server's
+    `BepInEx/config/RaidLedger.ValheimLink.cfg` set, under `[Server]`,
+    `WorldAllowlist = <production world>` (add the line by hand if the file was written by an older
+    version; edit the file in place, it holds the token). Leave `[Chests] DumpOnStart = false` for now.
+    **Silence Uptime Kuma, then start the server on the test world.** Never start or restart without it:
+    pause the server's Kuma monitor first (a Kuma maintenance window, or a power action with monitors
+    suppressed), or Discord gets DOWN/UP posts. Expect
+    `RLVL: loaded v0.2.1 (contract v1); …` and
+    `RLVL: world '<test world>' not in Server.WorldAllowlist; link idle`.
+    **If `RLVL: server half active: …` appears instead, stop and do not join:** the test world is linked,
+    and anything played there reaches Raid Ledger as the character's latest snapshot.
+12. **Build the test chests (once, in the test world, as an admin).** On join a 0.2.1 client logs
+    `RLVL: server declined this client; nothing is sent this session: world '<test world>' is not linked to Raid Ledger (Server.WorldAllowlist)`.
+    A 0.2.0 client logs `RLVL: server rejected a transfer: hello: world '<test world>' is not linked …`
+    instead and keeps sending; the server drops it. Either way nothing reaches Raid Ledger. Place and
     fill, and write down what you put where:
     - chest **A**: a wood chest with exact amounts of the three dump materials (default `Wood`, `Stone`,
       `Resin`), e.g. 50 Wood, 30 Stone, 20 Resin;
@@ -119,31 +138,19 @@ production world.
     - optional: a cart with items in it (vehicles are counted separately).
     Then wait for a world save (the server logs one every `-saveinterval`, or type `save` in the F5
     console as an admin) and log out.
-12. **Install 0.2.1 or later on the server.** Released: the DLLs of the Thunderstore package. Before
-    the release: from the PR's checks, open the `build` job's run, download the artifact
-    `GamerSaloon-ValheimLink-<sha>`, unzip it (it contains the Thunderstore zip; unzip that too) and copy
-    the three DLLs from `plugins/RlValheimLink/` over the ones in the server's
-    `BepInEx/plugins/RlValheimLink/`. Clients may stay on the pack's version (same RPC protocol).
-    In the server's `BepInEx/config/RaidLedger.ValheimLink.cfg` set, under `[Chests]` (add the section by
-    hand if the file was written by an older version):
-    `DumpOnStart = true` and, if you used other materials in step 11, `DumpMaterials = <A>,<B>,<C>`
-    (item prefab names, e.g. `Wood,Stone,Resin`). Leave `DumpRuns = 2` and `DumpRerunMinutes = 10`.
-13. **Silence Uptime Kuma, then restart the server.** Never restart without it: pause the server's Kuma
-    monitor first (a Kuma maintenance window, or a power action with monitors suppressed), or Discord gets
-    DOWN/UP posts. **Do not join for the first two minutes**, so the first dump reads every chest before
-    any player has loaded its area. Expect:
-    `RLVL: loaded v0.2.1 (contract v1); …`
-    on the test world with `WorldAllowlist` set to the production world
-    `RLVL: world '<test world>' not in Server.WorldAllowlist; link idle`, then
+13. **Turn the dump on and restart.** In the same config file, under `[Chests]` (the first 0.2.1 start
+    wrote it with defaults; add it by hand if it is missing), set `DumpOnStart = true` and, if you used
+    other materials in step 12, `DumpMaterials = <A>,<B>,<C>` (item prefab names, e.g.
+    `Wood,Stone,Resin`). Leave `DumpRuns = 2` and `DumpRerunMinutes = 10`. Silence Uptime Kuma again,
+    then restart. **Do not join for the first two minutes**, so the first dump reads every chest before
+    any player has loaded its area. Expect the two lines of step 11, then
     `RLVL: chestdump: ON (Chests.DumpOnStart) — 2 run(s), the first in 120 s, then 10 min apart; logs only, uploads nothing; materials Wood,Stone,Resin`
     two minutes later `RLVL: chestdump[r1] start (run 1 of 2): game=1.0.20 dedicated=True … playersConnected=0 …`,
     then the check lines below, and finally
     `RLVL: chestdump[r1] done in <s> s over <n> ticks` and
     `RLVL: chestdump: run 2 of 2 in 10 min — move some items in a chest you know before then (freshness check)`.
-14. **Freshness (check 6).** After `chestdump[r1] done`, join (on a world outside `WorldAllowlist` your
-    client logs `RLVL: server declined this client; nothing is sent this session: …`; that is expected),
-    and within the 10 minutes: take exactly 10
-    Wood out of chest A and put them into chest B; open your personal chest; stay next to chest A until
+14. **Freshness (check 6).** After `chestdump[r1] done`, join (the client lines of step 12 are
+    expected) and within the 10 minutes: take exactly 10 Wood out of chest A and put them into chest B; open your personal chest; stay next to chest A until
     `RLVL: chestdump[r2] done …` appears, then you may log out. Expect
     `RLVL: chestdump[r2.c6] since the previous run (<m> min ago): changed=2 unchanged=<n> added=0 removed=0 …`,
     `RLVL: chestdump[r2.c6] changed piece_chest_wood @(<x>, <y>, <z>): Wood q1 50→40` (and the same for B),
@@ -171,7 +178,7 @@ What each check prints (paste back all of them; step 16):
   one line per prefab found (`found= unique= duplicates= gone= creator0= counted= empty= unreadable= stacks= dropped= headerMismatch= maxRow= rowsBeyondPrefab= …`),
   `none in this world: …`, `totals with <variant>: … <ms> ms/stack`, `data sources: …`,
   `material <name>: <n> in <k> containers (shared <n>, personal <n>)` per material and `top items: …`.
-  **Compare the material totals with what you placed in step 11** (chest F included: it was not loaded).
+  **Compare the material totals with what you placed in step 12** (chest F included: it was not loaded).
 - **c4 creator:** `RLVL: chestdump[r1.c4] personal (privacy Private) containers with a creator: <n> …`, one line per personal chest
   `… creator=<playerId> creatorIndex=<int:… | absent> placer=<…> livePiece=<…>`, a key list of the first,
   and in run 2 `RLVL: chestdump[r2.c4] peer <uid>: playerId=<id> steam=<id> … personalChestsCreated=<n>` for you.
@@ -193,6 +200,6 @@ What each check prints (paste back all of them; step 16):
 16. **Send back:** the output of
     `grep 'RLVL: chestdump' BepInEx/LogOutput.log > chestdump.txt` on the server (the whole file, a few
     hundred lines; attach it rather than pasting), on a linked world your server line
-    `RLVL: peer <uid>: character character|<steamId>|<playerId> …` from step 14, what you placed in step 11
+    `RLVL: peer <uid>: character character|<steamId>|<playerId> …` from step 14, what you placed in step 12
     (chest, prefab if you know it, contents), what you moved in step 14 and roughly when, and whether
     anything in the chests looked different in game afterwards.
