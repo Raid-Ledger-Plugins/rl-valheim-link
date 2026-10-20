@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — 2026-10-20
+
+- No change to what the mod does in game or sends to Raid Ledger; the plugin code is the same as 0.2.2.
+- Development tooling: the mock Raid Ledger receiver (`tools/mock-ingest`) now enforces every rule Raid
+  Ledger checks beyond `schema.json`, for all five kinds (character, map, items, containers, recipes),
+  with Raid Ledger's issue paths and codes, so the upload tests catch any payload production would
+  refuse.
+
 ## 0.2.2 — 2026-10-20
 
 - Contract re-pinned to Raid Ledger `cef3748` (additive, still v1):
