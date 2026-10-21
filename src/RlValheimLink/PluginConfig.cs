@@ -23,17 +23,21 @@ namespace RlValheimLink
         public static ConfigEntry<int> MinSecondsBetweenCharacter, MinSecondsBetweenMap;
         // [Items]
         public static ConfigEntry<int> IconSize;
-        // [Chests] — the chest-inventory spike only (docs/design-chests.md §7)
-        public static ConfigEntry<bool> ChestsDumpOnStart;
+        // [Chests] — the chest scan (`containers`, docs/design-chests.md §1) and the spike's diagnostic dump (§7)
+        public static ConfigEntry<bool> ChestsEnabled, ChestsIncludeVehicles, ChestsDiagnosticDump;
+        public static ConfigEntry<int> ChestsIntervalMinutes, ChestsStacksPerTick;
+        public static ConfigEntry<string> ChestsExcludePrefabs, ChestsExtraPrefabs;
         public static ConfigEntry<int> ChestsDumpRuns, ChestsDumpRerunMinutes;
         public static ConfigEntry<string> ChestsDumpMaterials;
+        // [Recipes] — the `recipes` export (docs/design-chests.md §2)
+        public static ConfigEntry<bool> RecipesEnabled;
 
         public static void Bind(ConfigFile cfg)
         {
             BaseUrl = cfg.Bind("RaidLedger", "BaseUrl", "", "Server only. Your Raid Ledger instance's base URL (scheme + host, no trailing slash). Empty = uploads off.");
             ServerToken = cfg.Bind("RaidLedger", "ServerToken", "", "Server only. Per-server bearer token issued by Raid Ledger admin for THIS game server. Never logged.");
             ServerId = cfg.Bind("RaidLedger", "ServerId", "", "Server only. Raid Ledger's id for this game server, issued with the token; goes into every message.");
-            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items (ROK-1833). Change only to point at a mock on another path.");
+            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items | containers | recipes (ROK-1833). Change only to point at a mock on another path.");
             BlobsPath = cfg.Bind("RaidLedger", "BlobsPath", "/api/plugins/valheim/link/blobs/{sha256}", "Server only. PUT route for PNG blobs; {sha256} is replaced (ROK-1833).");
 
             UploadIntervalSeconds = cfg.Bind("Upload", "IntervalSeconds", 5, new ConfigDescription("Server only. Minimum seconds between HTTP requests to Raid Ledger.", new AcceptableValueRange<int>(1, 600)));
@@ -61,10 +65,18 @@ namespace RlValheimLink
 
             IconSize = cfg.Bind("Items", "IconSize", 64, new ConfigDescription("Client only. Icon edge in pixels for the items atlas (reduced automatically if the PNG would exceed 16 MiB).", new AcceptableValueRange<int>(16, 128)));
 
-            ChestsDumpOnStart = cfg.Bind("Chests", "Dump", true, "Dedicated server only (not single-player or self-hosted worlds). DIAGNOSTIC for the planned chest-inventory capture (docs/design-chests.md §7), on by default: 2 minutes after every start, log what the server can read from every container (lines start 'RLVL: chestdump'). Logs only; uploads nothing, so it also runs on a world that is not in [Server] WorldAllowlist. Set false to skip it. (Replaces DumpOnStart, which is ignored.)");
-            ChestsDumpRuns = cfg.Bind("Chests", "DumpRuns", 2, new ConfigDescription("Dedicated server only. How many dumps to run after each start when Dump is on; every dump after the first also reports what changed since the previous one.", new AcceptableValueRange<int>(1, 6)));
+            ChestsEnabled = cfg.Bind("Chests", "Enabled", true, "Dedicated server only. Scan every player-built container (chests, carts, ships) and send its contents to Raid Ledger as a `containers` snapshot: 2 minutes after start, then every IntervalMinutes. On by default; set false to switch it off. Needs the [RaidLedger] settings and a world in [Server] WorldAllowlist.");
+            ChestsIntervalMinutes = cfg.Bind("Chests", "IntervalMinutes", 10, new ConfigDescription("Dedicated server only. Minutes between chest scans, on a fixed grid from the first scan. Every scan is sent, even when nothing changed, so the site's \"scanned N min ago\" is honest.", new AcceptableValueRange<int>(5, 120)));
+            ChestsStacksPerTick = cfg.Bind("Chests", "StacksPerTick", 200, new ConfigDescription("Dedicated server only. Item stacks decoded per server tick while a scan runs (time-slicing; 0.004 ms per stack measured on a production world).", new AcceptableValueRange<int>(20, 5000)));
+            ChestsIncludeVehicles = cfg.Bind("Chests", "IncludeVehicles", true, "Dedicated server only. Also scan carts and ships (flagged as vehicles; the site can hide them).");
+            ChestsExcludePrefabs = cfg.Bind("Chests", "ExcludePrefabs", "incinerator", "Dedicated server only. Comma-separated container prefabs never scanned. Default: the obliterator, whose contents are about to be destroyed.");
+            ChestsExtraPrefabs = cfg.Bind("Chests", "ExtraPrefabs", "", "Dedicated server only. Comma-separated container prefabs to scan although no build tool lists them (a modded chest placed some other way). Player-built only: a container without a creator is never sent.");
+            ChestsDiagnosticDump = cfg.Bind("Chests", "DiagnosticDump", false, "Dedicated server only. The 0.2.x chest-inventory spike's diagnostic (docs/design-chests.md §7): 2 minutes after every start, log what the server can read from every container (lines start 'RLVL: chestdump'). Logs only. Off by default now that the chest scan ships; replaces Dump, which is ignored.");
+            ChestsDumpRuns = cfg.Bind("Chests", "DumpRuns", 2, new ConfigDescription("Dedicated server only. How many dumps to run after each start when DiagnosticDump is on; every dump after the first also reports what changed since the previous one.", new AcceptableValueRange<int>(1, 6)));
             ChestsDumpRerunMinutes = cfg.Bind("Chests", "DumpRerunMinutes", 10, new ConfigDescription("Dedicated server only. Minutes between dumps (from the end of one to the start of the next).", new AcceptableValueRange<int>(1, 120)));
             ChestsDumpMaterials = cfg.Bind("Chests", "DumpMaterials", "Wood,Stone,Resin", "Dedicated server only. Comma-separated item prefab names (up to 5) whose totals over all player-built containers each dump prints, to compare with what you see in the chests.");
+
+            RecipesEnabled = cfg.Bind("Recipes", "Enabled", true, "Dedicated server only. Send the server's crafting recipes, build pieces, crafting stations and processing steps (smelter, kiln, fermenter, cooking, obliterator…) to Raid Ledger as a `recipes` snapshot, once per game version and server mod set, about 90 s after start. On by default; set false to switch it off.");
         }
     }
 }

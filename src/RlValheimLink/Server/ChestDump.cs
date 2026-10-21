@@ -13,8 +13,8 @@ using UnityEngine;
 namespace RlValheimLink.Server
 {
     /// <summary>
-    /// Chest-inventory spike (docs/design-chests.md §7), server only, on by default (Chests.Dump; the
-    /// operator wants no flags to set). Two minutes after the world loads it finds every container ZDO, decodes each with the
+    /// Chest-inventory spike (docs/design-chests.md §7), server only, opt-in since 0.3.0 (Chests.DiagnosticDump;
+    /// the chest scan, <see cref="ChestScanner"/>, is what ships). Two minutes after the world loads it finds every container ZDO, decodes each with the
     /// game's own Inventory.Load and logs `RLVL: chestdump[r&lt;run&gt;.c&lt;check&gt;]` lines for the seven
     /// checks; every later run (Chests.DumpRuns, Chests.DumpRerunMinutes apart) also reports what changed.
     /// It uploads nothing and adds no message kind, so Roles starts it, not ServerHalf: it also runs on a world
@@ -77,10 +77,10 @@ namespace RlValheimLink.Server
         public static void Start()
         {
             _run = null; _runNumber = 0; _previous = null; _previousMaterials = null; _chosenLoader = null;
-            if (!PluginConfig.ChestsDumpOnStart.Value) { _nextRunAt = DateTime.MaxValue; return; }
+            if (!PluginConfig.ChestsDiagnosticDump.Value) { _nextRunAt = DateTime.MaxValue; return; }
             _runsTotal = PluginConfig.ChestsDumpRuns.Value;
             _nextRunAt = DateTime.UtcNow.AddSeconds(FirstDelaySeconds);
-            Log.Info($"chestdump: ON (Chests.Dump, default on) — {_runsTotal} run(s), the first in {FirstDelaySeconds} s, then {PluginConfig.ChestsDumpRerunMinutes.Value} min apart; logs only, uploads nothing; materials {string.Join(",", Materials())}");
+            Log.Info($"chestdump: ON (Chests.DiagnosticDump) — {_runsTotal} run(s), the first in {FirstDelaySeconds} s, then {PluginConfig.ChestsDumpRerunMinutes.Value} min apart; logs only, uploads nothing; materials {string.Join(",", Materials())}");
         }
 
         public static void Stop() { _run = null; _nextRunAt = DateTime.MaxValue; }
@@ -102,7 +102,7 @@ namespace RlValheimLink.Server
                 else
                 {
                     _nextRunAt = DateTime.MaxValue;
-                    Log.Info($"chestdump: finished ({_runsTotal} run(s)); it runs again after the next start unless [Chests] Dump = false");
+                    Log.Info($"chestdump: finished ({_runsTotal} run(s)); it runs again after the next start while [Chests] DiagnosticDump = true");
                 }
                 return;
             }
