@@ -1,8 +1,10 @@
 # Chest inventory, base materials and crafting planner — scouting design
 
-Status: **scouting draft, 2026-10-19; operator rulings applied and the design
-independently reviewed the same day (§8). Nothing here is built.** No mod code
-and no contract file changes accompany this document. It proposes two new
+Status: **built in mod 0.3.0 (2026-10-21, ROK-1879)** against the shipped
+contract (`containers` ROK-1853, `recipes` ROK-1854, pinned at `cef3748`). §0.2
+says what was built and where it differs from the scouting draft below
+(2026-10-19, operator rulings applied, independently reviewed the same day, §8);
+the rest of the document is kept for the reasoning. It proposes two new
 message kinds, which per `AGENTS.md` ("Raid Ledger owns the wire format") must
 start as Raid Ledger contract stories. §4 and §5 are written so they can be
 pasted into Linear; §6.1 sketches the other stories.
@@ -111,6 +113,40 @@ UNVERIFIED notes in §1 and §2 where they differ.
 - The recipes export skips conversions with a null input or output
   (`BatteringRam`, `piece_FrostKiln`, `piece_bathtub`) and carries two
   additive fields: `stations[].upgrader` and `resources[].upgraderResource`.
+
+### 0.2 What 0.3.0 built (ROK-1879)
+
+| | Built | Differs from the draft |
+|---|---|---|
+| Chest scan | `Server/ChestScanner.cs` (game glue: prefab list, time-sliced discovery, decode with `Inventory(true)` + `Load(pkg, true)`), `Core/ContainersBuilder.cs` (rounding, aggregation, same-creator merge, sort, slots rule, every §1.8 cap), `Core/ScanSchedule.cs` (fixed grid) | no forced scan (`rlvl export chests` would need a client → server command, i.e. a client update; the 10-minute grid makes it unnecessary for now) |
+| Recipes | `Server/RecipesExport.cs` (game glue, four phases over four ticks), `Core/RecipesBuilder.cs` (id fallback, references, duplicate requirements summed, obliterator conversions of more than 8 alternatives split into groups of 8, sort, caps) | **read on the dedicated server, not an admin client** (§2.1): the server has the same `ObjectDB` and its mods are the source of ServerSync-style overrides, and the operator wants the server update alone to fill the Planner. Consequence: **no icons** (a dedicated server has no GPU path for sprites): `atlas: null`, every piece and station icon null, which v1 allows. No `features`/`needRecipes`/lease; the marker is `RecipesExports` keyed by (`gameVersion`, **the server's** mod-set hash) in `spool/index.json`, cleared by `ResetIfTargetChanged` |
+| Both | `Enricher.Seal` (serverId, validation, key `containers|<worldUid>` / `recipes|<gameVersion>`) → `Spool` (latest wins) → `Uploader` | — |
+
+**Cadence and triggers.** Chests: on start (+2 min), then every `Chests.IntervalMinutes` (default 10,
+operator ruling 4) on a fixed grid; every scan is sent. Not on container close: under MultiUserChest the
+closing client owns the chest's ZDO and the server sees the change a moment later by normal ZDO sync,
+so a close hook on the server is unreliable, and a send per close would multiply messages for no gain at
+a 10-minute freshness target. A slot that finds a scan still running, or that passed while the server
+stalled, is skipped (logged), never made up. Recipes: ~90 s after start (other mods have registered
+their recipes by then), once per (game version, server mod set); a new mod version or game update sends
+it again.
+
+**Batching.** One `containers` message per world per scan (the whole world, latest wins, key
+`containers|<worldUid>`): production is 111 containers / 524 stacks, ≈ 30 KB of JSON. One `recipes`
+message per game version (≈ 0.5 MB JSON vanilla, well under the 12 MiB cap; gzip on the wire).
+
+**Rate limits.** Six `containers` POSTs an hour and one `recipes` POST per game version / mod set,
+against the mod's own budget of 30 messages a minute (`Upload.MaxMessagesPerMinute`; Raid Ledger allows
+60). While uploads back off, a newer scan replaces the pending one in the spool, so a long outage sends
+one snapshot, not a backlog. Game-side: discovery makes one `GetAllZDOsWithPrefabIterative` call per tick
+(production: 17 prefabs, about 9 calls each, busiest tick ~1.3 ms); decode about `Chests.StacksPerTick` (200)
+stacks per tick (0.004 ms per stack); the recipes export spreads over four ticks (the dump's comparable
+setup tick was 55 ms once, then 15 ms).
+
+**Guards.** Dedicated servers only; nothing runs while the world is outside `Server.WorldAllowlist` (the
+server half idles) or while the `[RaidLedger]` settings are missing; a message that fails the pre-send
+validator is logged with its issue paths and never spooled; a scan that throws is logged and the next
+slot starts a fresh one.
 
 ## 1. Game side: enumerating containers on the dedicated server
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using Newtonsoft.Json.Linq;
@@ -22,6 +23,8 @@ namespace RlValheimLink.Server
     /// The dedicated-server half (design §4–§6): receive a transfer → inflate under the kind's cap →
     /// enrich with what the server can prove → validate → spool (latest wins) → upload; render the
     /// base map once per world; ask one client for the items export per (game version, mod set).
+    /// On a dedicated server it also builds two kinds itself (docs/design-chests.md): the chest scan
+    /// (`containers`, on a fixed grid) and the `recipes` export (once per game version + server mod set).
     /// </summary>
     internal static class ServerHalf
     {
@@ -35,6 +38,21 @@ namespace RlValheimLink.Server
         private static string _worldUid, _gameVersion, _worldName;
         /// <summary>The loaded world is not in Server.WorldAllowlist: hellos are declined, nothing is rendered, spooled or uploaded.</summary>
         private static bool _worldIdle;
+        private static bool _dedicated, _waitingLogged;
+
+        // Chest scan (`containers`, docs/design-chests.md §1.7): first slot 2 min after start, then every Chests.IntervalMinutes.
+        private static readonly TimeSpan ChestFirstDelay = TimeSpan.FromMinutes(2);
+        private static ScanSchedule _chestSchedule;
+        private static ChestScanner _chests;
+        private static int _chestScans, _unreadableStreak;
+        private static DateTime _unreadableWarnAt = DateTime.MinValue;
+        private static string _chestStatus = "off";
+
+        // Recipes export (docs/design-chests.md §2): ~90 s after start, once per (game version, server mod set).
+        private static RecipesExport _recipes;
+        private static DateTime _recipesAt = DateTime.MaxValue;
+        private static string _serverModSet;
+        private static string _recipesStatus = "off";
 
         public static string SpoolDirectory =>
             string.IsNullOrEmpty(PluginConfig.SpoolDirectory.Value) ? Path.Combine(BepInEx.Paths.BepInExRootPath, "RLValheimLink", "spool") : PluginConfig.SpoolDirectory.Value;
@@ -49,6 +67,9 @@ namespace RlValheimLink.Server
             _gameVersion = GameInfo.GameVersion();
             _worldName = GameInfo.WorldName();
             _worldIdle = !WorldAllowlist.Allows(PluginConfig.WorldAllowlist.Value, _worldName);
+            _dedicated = ZNet.instance != null && ZNet.instance.IsDedicated();
+            _chestSchedule = null; _chests = null; _chestScans = 0; _unreadableStreak = 0; _chestStatus = "off";
+            _recipes = null; _recipesAt = DateTime.MaxValue; _serverModSet = null; _recipesStatus = "off"; _waitingLogged = false;
             if (_worldIdle)
             {
                 Log.Info($"world '{_worldName}' not in Server.WorldAllowlist; link idle");
@@ -89,11 +110,13 @@ namespace RlValheimLink.Server
 
             Log.Info($"server half active: serverId='{PluginConfig.ServerId.Value}' baseUrl='{PluginConfig.BaseUrl.Value}' token={(tokenSet ? "set" : "MISSING")} world={_worldUid} game={_gameVersion} spool={SpoolDirectory} ({_spool.Summary()})");
             if (!configured) Log.Warn("RaidLedger.BaseUrl, ServerToken and ServerId must all be set in BepInEx/config/RaidLedger.ValheimLink.cfg; messages are spooled but NOT uploaded until then");
+            StartServerKinds();
         }
 
         public static void Stop()
         {
             _active = false; _worldIdle = false;
+            _chests?.Cancel(); _chests = null; _chestSchedule = null; _recipes = null;
             LinkChannel.PayloadReceived -= OnPayload;
             _client?.Dispose(); _client = null; _uploader = null; _spool = null; _baseMap = null;
         }
@@ -115,6 +138,7 @@ namespace RlValheimLink.Server
                     else if (_baseMap.Tick()) SpoolBaseMap();
                 }
                 if (Configured()) _uploader.Tick(now);
+                TickServerKinds(now);
                 if (now >= _nextStatus)
                 {
                     _nextStatus = now.AddMinutes(5);
@@ -137,7 +161,145 @@ namespace RlValheimLink.Server
 
         public static string Status() => !_active ? "server half inactive"
             : _worldIdle ? $"link idle: world '{_worldName}' not in Server.WorldAllowlist"
-            : $"uploader={_uploader?.State} {_spool?.Summary()} uploaded={_uploader?.Uploaded} failed={_uploader?.Failed} baseMap={(_baseMap == null ? "off" : _baseMap.Done ? "ready" : _baseMap.Busy ? "rendering" : "pending")}";
+            : $"uploader={_uploader?.State} {_spool?.Summary()} uploaded={_uploader?.Uploaded} failed={_uploader?.Failed} baseMap={(_baseMap == null ? "off" : _baseMap.Done ? "ready" : _baseMap.Busy ? "rendering" : "pending")} chests={_chestStatus} recipes={_recipesStatus}";
+
+        // ---------- kinds the server builds itself: containers, recipes ----------
+
+        private static void StartServerKinds()
+        {
+            if (!_dedicated)
+            {
+                // A player's single-player or self-hosted world (IsServer too) gets no scan hitches.
+                Log.Info("chest scan and recipes export: dedicated servers only; off on this self-hosted world");
+                return;
+            }
+            var now = DateTime.UtcNow;
+            if (PluginConfig.ChestsEnabled.Value)
+            {
+                _chestSchedule = new ScanSchedule(now, ChestFirstDelay, TimeSpan.FromMinutes(PluginConfig.ChestsIntervalMinutes.Value));
+                _chestStatus = "scheduled";
+                Log.Info($"chest scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min, the first in {ChestFirstDelay.TotalSeconds:0} s; vehicles {(PluginConfig.ChestsIncludeVehicles.Value ? "included" : "excluded")}; excluded prefabs: {Csv(PluginConfig.ChestsExcludePrefabs.Value)}");
+            }
+            else Log.Info("chest scan off (Chests.Enabled = false)");
+            if (PluginConfig.RecipesEnabled.Value) { _recipesAt = now.AddSeconds(90); _recipesStatus = "scheduled"; }
+            else Log.Info("recipes export off (Recipes.Enabled = false)");
+        }
+
+        private static void TickServerKinds(DateTime now)
+        {
+            if (_chestSchedule == null && _recipesAt == DateTime.MaxValue && _recipes == null) return;
+            if (!Configured())
+            {
+                // Nothing would reach Raid Ledger: spare the server the scans until the settings are there.
+                if (!_waitingLogged) { _waitingLogged = true; Log.Info("chest scan and recipes export wait for the [RaidLedger] settings"); }
+                return;
+            }
+            TickChests(now);
+            TickRecipes(now);
+        }
+
+        private static void TickChests(DateTime now)
+        {
+            if (_chestSchedule == null) return;
+            if (_chests != null && _chests.Running)
+            {
+                ChestScanner.Result result = null;
+                try { result = _chests.Tick(); }
+                catch (Exception e) { Log.Error("chest scan aborted; the next scan starts on schedule", e); _chestStatus = "aborted"; }
+                if (result != null) FinishChestScan(result);
+            }
+            if (!_chestSchedule.TryStart(now, _chests != null && _chests.Running, out DateTime slot, out int skipped)) return;
+            if (skipped > 0) Log.Info($"chest scan: {skipped} slot(s) skipped (a scan was still running or the server stalled)");
+            if (_chests == null)
+            {
+                _chests = ChestScanner.Create(PluginConfig.ChestsStacksPerTick.Value, PluginConfig.ChestsIncludeVehicles.Value,
+                    CsvSet(PluginConfig.ChestsExcludePrefabs.Value), CsvSet(PluginConfig.ChestsExtraPrefabs.Value));
+                if (_chests == null) { Log.Warn("chest scan: the world is not loaded yet; trying at the next slot"); return; }
+                var prefabs = _chests.Prefabs;
+                int vehicles = 0; foreach (var p in prefabs) if (p.Vehicle) vehicles++;
+                Log.Info($"chest scan: {prefabs.Count} container prefabs ({vehicles} vehicles): {ChestScanner.Describe(prefabs)}");
+            }
+            _chests.Begin(slot);
+            _chestStatus = "scanning";
+        }
+
+        private static void FinishChestScan(ChestScanner.Result res)
+        {
+            _chestScans++;
+            var msg = ContainersBuilder.Build(new ContainersHeader
+            {
+                ServerId = PluginConfig.ServerId.Value, GameVersion = _gameVersion, ModVersion = Plugin.Version, WorldUid = _worldUid, CapturedAtUtc = res.ScheduledAt,
+            }, res.Containers, out var rep);
+            var r = Enricher.Seal(msg, PluginConfig.ServerId.Value);
+            if (!r.Ok) { Log.Error($"chest scan {_chestScans}: containers message NOT sent, it fails the contract: {Truncate(r.Reason, 400)}"); _chestStatus = "invalid"; return; }
+            var outcome = _spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, DateTime.UtcNow);
+            _chestStatus = $"last {r.CapturedAt} ({rep.Containers} containers)";
+            Log.Info($"chest scan {_chestScans}: {rep.Containers} containers ({rep.Vehicles} vehicles, {rep.Private} personal), {rep.Stacks} stacks in {rep.Entries} entries, " +
+                $"{res.Dropped} dropped, {res.Duplicates} duplicates removed, {res.Gone} gone mid-scan, {res.Creator0} not player-built, {rep.Merged} merged, {rep.Unreadable} unreadable, " +
+                $"{rep.OmittedShared + rep.OmittedPrivate} omitted; {ChestScanner.Ms(res.Ms)} ms over {res.Ticks} ticks (busiest {ChestScanner.Ms(res.BusiestTickMs)} ms); " +
+                $"{r.Key} capturedAt={r.CapturedAt} {r.Bytes.Length} bytes → {outcome}");
+            if (rep.CapsApplied)
+                Log.Warn($"chest scan {_chestScans}: contract caps applied: {rep.SlotsClamped} container(s) clamped to {Caps.ContainerSlotsMax} slots, {rep.ContainersOverEntries} container(s) over {Caps.ContainerItemsMax} entries ({rep.EntriesOmitted} entries omitted), {rep.OmittedShared + rep.OmittedPrivate} container(s) dropped by the message caps");
+            if (rep.InvalidStacks > 0) Log.Debug($"chest scan {_chestScans}: {rep.InvalidStacks} stack(s) without a prefab skipped");
+            _unreadableStreak = rep.Unreadable > 0 ? _unreadableStreak + 1 : 0;
+            var now = DateTime.UtcNow;
+            if (_unreadableStreak >= 3 && now >= _unreadableWarnAt)
+            {
+                _unreadableWarnAt = now.AddHours(1);
+                Log.Warn($"chest scan: {rep.Unreadable} container(s) could not be decoded in {_unreadableStreak} scans in a row; they are sent as unreadable (no items). A mod that changes the chest format?");
+            }
+        }
+
+        private static void TickRecipes(DateTime now)
+        {
+            if (_recipes != null && _recipes.Running)
+            {
+                RecipesExport.Result result = null;
+                try { result = _recipes.Tick(); }
+                catch (Exception e) { Log.Error("recipes export aborted; it is tried again after the next start", e); _recipes = null; _recipesStatus = "aborted"; return; }
+                if (result != null) { FinishRecipes(result); _recipes = null; }
+                return;
+            }
+            if (now < _recipesAt) return;
+            if (ObjectDB.instance == null || ZNetScene.instance == null || ObjectDB.instance.m_recipes == null) { _recipesAt = now.AddSeconds(30); return; }
+            _recipesAt = DateTime.MaxValue;
+            _serverModSet = ClientHalf.ModSetHash();
+            if (_spool.HasRecipesExport(_gameVersion, _serverModSet))
+            {
+                _recipesStatus = "sent";
+                Log.Info($"recipes export: already sent for game {_gameVersion} and this server's mod set ({_serverModSet.Substring(0, 12)}…)");
+                return;
+            }
+            _recipes = new RecipesExport();
+            _recipes.Begin(now, _gameVersion);
+            _recipesStatus = "exporting";
+        }
+
+        private static void FinishRecipes(RecipesExport.Result res)
+        {
+            var msg = RecipesBuilder.Normalise(res.Message, out var rep);
+            var r = Enricher.Seal(msg, PluginConfig.ServerId.Value);
+            if (!r.Ok) { Log.Error($"recipes export NOT sent, it fails the contract: {Truncate(r.Reason, 400)}"); _recipesStatus = "invalid"; return; }
+            var outcome = _spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, DateTime.UtcNow);
+            if (outcome != PutOutcome.DroppedOlder) _spool.MarkRecipesExport(_gameVersion, _serverModSet, r.CapturedAt);
+            _recipesStatus = "sent";
+            Log.Info($"recipes export: {rep.Recipes} recipes, {rep.Pieces} pieces, {rep.Stations} stations, {rep.Processors} processors, {rep.Processes} processes, {rep.Entries} entries, " +
+                $"custom formula: {rep.CustomFormula}, ids renamed: {rep.RenamedIds}, icons: none (dedicated server); {ChestScanner.Ms(res.Ms)} ms over {res.Ticks} ticks (busiest {ChestScanner.Ms(res.BusiestTickMs)} ms); " +
+                $"{r.Key} capturedAt={r.CapturedAt} {r.Bytes.Length} bytes → {outcome}");
+            if (rep.Dropped)
+                Log.Warn($"recipes export: dropped to fit the contract: {rep.DroppedRecipes} recipes, {rep.DroppedPieces} pieces, {rep.DroppedStations} stations, {rep.DroppedProcessors} processors (no usable conversion), {rep.DroppedProcesses} processes, {rep.DroppedResources} requirements");
+            if (rep.DanglingStations > 0 || rep.SplitProcesses > 0 || rep.MergedResources > 0)
+                Log.Debug($"recipes export: {rep.DanglingStations} unknown station reference(s) cleared, {rep.SplitProcesses} obliterator conversion(s) split into groups of {Caps.ProcessInputsMax}, {rep.MergedResources} duplicate requirement(s) summed");
+        }
+
+        private static HashSet<string> CsvSet(string csv)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var part in (csv ?? "").Split(',')) { var t = part.Trim(); if (t.Length > 0) set.Add(t); }
+            return set;
+        }
+
+        private static string Csv(string csv) { var set = CsvSet(csv); return set.Count == 0 ? "none" : string.Join(",", set); }
 
         // ---------- receive ----------
 

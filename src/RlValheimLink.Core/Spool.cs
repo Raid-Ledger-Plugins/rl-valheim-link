@@ -44,6 +44,8 @@ namespace RlValheimLink.Core
             public Dictionary<string, SpoolBlob> Blobs = new Dictionary<string, SpoolBlob>();
             /// <summary>"gameVersion|modSetHash" → capturedAt of the accepted items export.</summary>
             public Dictionary<string, string> ItemsExports = new Dictionary<string, string>();
+            /// <summary>"gameVersion|modSetHash" (the server's own mod set) → capturedAt of the spooled recipes export.</summary>
+            public Dictionary<string, string> RecipesExports = new Dictionary<string, string>();
             /// <summary>Fingerprint of the upload target (instance URL, server id, token) the markers above belong to.</summary>
             public string Target;
         }
@@ -185,7 +187,7 @@ namespace RlValheimLink.Core
             Save();
         }
 
-        // ---------- items export bookkeeping ----------
+        // ---------- items and recipes export bookkeeping ----------
 
         public bool HasItemsExport(string gameVersion, string modSetHash) => _index.ItemsExports.ContainsKey(gameVersion + "|" + modSetHash);
 
@@ -195,10 +197,18 @@ namespace RlValheimLink.Core
             Save();
         }
 
+        public bool HasRecipesExport(string gameVersion, string modSetHash) => _index.RecipesExports.ContainsKey(gameVersion + "|" + modSetHash);
+
+        public void MarkRecipesExport(string gameVersion, string modSetHash, string capturedAt)
+        {
+            _index.RecipesExports[gameVersion + "|" + modSetHash] = capturedAt;
+            Save();
+        }
+
         /// <summary>
         /// When the Raid Ledger target changes (instance rebuilt, server id or token changed) nothing
         /// uploaded so far exists there any more: forget the uploaded markers so blobs and the items
-        /// export are re-sent, and drop blob entries whose files were deleted after upload so a
+        /// and recipes exports are re-sent, and drop blob entries whose files were deleted after upload so a
         /// re-render / re-export re-queues them. Pending messages and the dedupe watermarks stay
         /// (the next capture is newer anyway). Returns true when a reset happened.
         /// </summary>
@@ -211,6 +221,7 @@ namespace RlValheimLink.Core
             {
                 _index.LastUploaded.Clear();
                 _index.ItemsExports.Clear();
+                _index.RecipesExports.Clear();
                 var gone = new List<string>();
                 foreach (var kv in _index.Blobs)
                 {

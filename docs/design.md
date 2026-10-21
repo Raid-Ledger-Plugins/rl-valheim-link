@@ -47,12 +47,21 @@ its own captures loop back through `ZRoutedRpc` to itself.
 | `map` | client | same trigger, **only if** the explored bitsets or pin list changed since the last send (SHA-256 of `m_explored`, `m_exploredOthers`, pins) | (`steamId`, `playerId`, `worldUid`) | opt-out; unchanged; sent < 5 min ago |
 | `items` | **client**, on server request | server asks on `hello` when it has no export for (`gameVersion`, mod-set hash) | (`gameVersion`) | client is not allowed to export (§9 Q3); another export in flight |
 | base map PNG (binary for `map.baseMap`) | **server** | world loaded; once per (`worldUid`, `gameVersion`); cached on disk | — | already rendered |
+| `containers` (0.3.0) | **server** (dedicated) | chest scan 2 min after start, then every `Chests.IntervalMinutes` (10) on a fixed grid; always sent | (`worldUid`) | `Chests.Enabled = false`; not dedicated; world not in `WorldAllowlist`; `[RaidLedger]` settings missing |
+| `recipes` (0.3.0) | **server** (dedicated) | ~90 s after start, once per (`gameVersion`, the server's mod-set hash) | (`gameVersion`) | `Recipes.Enabled = false`; already sent for this (game version, mod set); same conditions as `containers` |
 
 Why the items export runs on a client: sprite textures are not CPU-readable,
 so icons are copied through a `RenderTexture`. A dedicated server runs
 `-batchmode -nographics` and has no GPU path, so it cannot render an atlas.
 Names alone could be exported server-side, but the contract makes `atlas`
 mandatory when any icon is an atlas icon, so one client does the whole export.
+
+The two server-built kinds are documented in [`design-chests.md`](design-chests.md) §0.2 (what 0.3.0
+built, cadence, batching, rate limits) and §1–§2 (game reads). They never pass through a client or the
+RPC: the server builds the message, `Core/ContainersBuilder` or `Core/RecipesBuilder` normalises it,
+`Enricher.Seal` sets `serverId` and validates it, and the spool and uploader send it like any other.
+Because the recipes export runs on the server, it has no sprites: `atlas` is null and every piece and
+station icon is null (the contract allows that; the items catalogue still carries item icons).
 
 Game reads (all on the main thread, inside the postfix, no coroutines):
 
@@ -264,7 +273,13 @@ client a few hundred KB of upload once per changed save.
 | `Client.SendCharacter` / `SendMap` | true | client | finer opt-outs |
 | `Client.MinSecondsBetweenCharacter` / `…Map` | 30 / 300 | client | throttles |
 | `Items.IconSize` | 64 | client | atlas icon edge in px |
-| `Chests.Dump` | true | server | **diagnostic** for the chest-inventory spike (`docs/design-chests.md` §7), on by default (operator ruling: no flags), dedicated servers only (not single-player or self-hosted worlds): 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist` (the link idles there) and without a Raid Ledger target. Replaces `DumpOnStart` (ignored) |
+| `Chests.Enabled` | true | server | the chest scan (`containers`, 0.3.0), dedicated servers only; exists only to switch it off (operator ruling: no flags to set) |
+| `Chests.IntervalMinutes` | 10 | server | minutes between scans (5–120), fixed grid from the first scan 2 min after start |
+| `Chests.StacksPerTick` | 200 | server | decoded stacks per server tick while a scan runs |
+| `Chests.IncludeVehicles` | true | server | also scan carts and ships (flagged `vehicle`) |
+| `Chests.ExcludePrefabs` / `ExtraPrefabs` | `incinerator` / `` | server | container prefabs never scanned / scanned although no build tool lists them |
+| `Recipes.Enabled` | true | server | the `recipes` export (0.3.0), dedicated servers only; exists only to switch it off |
+| `Chests.DiagnosticDump` | false | server | the 0.2.1 spike's **diagnostic** (`docs/design-chests.md` §7), dedicated servers only: 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist`. Off since 0.3.0 (the scan ships); replaces `Dump` (ignored) |
 | `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
 | `Chests.DumpMaterials` | `Wood,Stone,Resin` | server | item prefabs whose totals each dump prints (up to 5) |
 
@@ -314,14 +329,15 @@ client a few hundred KB of upload once per changed save.
 
 ## 10. Contract change requests
 
-**Proposed, not filed (2026-10-19):** two new additive kinds, `containers`
-(chest contents per world, scanned by the server every 10 minutes, on by
-default) and
-`recipes` (crafting recipes, build pieces, stations and processing steps,
-exported by an admin client). Scouting
-design and Linear-ready story drafts: [`design-chests.md`](design-chests.md)
-§4–§5. The mod emits neither until Raid Ledger ships them and the pin is
-refreshed.
+**Shipped by Raid Ledger and sent since 0.3.0:** the additive kinds `containers`
+(ROK-1853) and `recipes` (ROK-1854), pinned at `cef3748`. The mod emits them as
+v1 defines them; nothing was changed. Two notes for the Raid Ledger side, neither a
+format change: CONTRACT §5b's prose says `recipes` is "sent by an admin client"
+while 0.3.0 builds it on the dedicated server (same wire format, same snapshot key);
+and the server's export has no piece or station icons (`atlas: null`, all icons
+null), which v1 allows. Piece icons would need an admin-client export of the
+piece atlas (a mod follow-up, no contract change). Scouting design and the story
+drafts: [`design-chests.md`](design-chests.md) §4–§5.
 
 For what is shipped: everything the mod reads fits v1. **Received (additive, 2026-10-18,
 pinned at the commit in `contract/PIN.md`):** a `file` item icon may carry an

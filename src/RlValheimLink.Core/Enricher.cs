@@ -130,6 +130,32 @@ namespace RlValheimLink.Core
             return r;
         }
 
+        /// <summary>
+        /// A message the server built itself (`containers`, `recipes`): there is no sending peer to check, so
+        /// the server sets serverId, validates and serialises; the snapshot key is (kind, world) for
+        /// containers and (kind, game version) for recipes (CONTRACT.md §5a, §5b).
+        /// </summary>
+        public static EnrichResult Seal(LinkMessage message, string serverId)
+        {
+            var r = new EnrichResult { Kind = message?.Kind };
+            if (message is ContainersMessage c) r.Key = ContainersBuilder.SpoolKey(c.WorldUid);
+            else if (message is RecipesMessage) r.Key = RecipesBuilder.SpoolKey(message.GameVersion);
+            else { r.Reason = "not a server-built kind"; return r; }
+            message.ServerId = serverId ?? "";
+            r.CapturedAt = message.CapturedAt;
+            var msg = MessageJson.ToToken(message);
+            var issues = Validator.Validate(msg);
+            if (issues.Count > 0)
+            {
+                r.Reason = "contract: " + string.Join("; ", issues.ConvertAll(i => i.ToString()).ToArray());
+                return r;
+            }
+            CollectRefs(msg, r.BlobRefs);
+            r.Bytes = MessageJson.ToBytes(msg);
+            r.Ok = true;
+            return r;
+        }
+
         /// <summary>Every sha256 a message references (base map, atlas, file-icon blobs).</summary>
         public static void CollectRefs(JObject msg, List<string> into)
         {
