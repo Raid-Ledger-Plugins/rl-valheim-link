@@ -107,6 +107,36 @@ public class UploaderMockTests : IDisposable
     }
 
     [Fact]
+    public async Task Recipes_with_the_piece_icon_atlas_upload_the_blob_first_and_are_accepted()
+    {
+        // 0.4.0: the server applies an admin client's piece atlas; the atlas blob is spooled when the client sends it.
+        await StartMock(new() { ["RLVL_MOCK_TOKEN"] = "t", ["RLVL_MOCK_SERVER_ID"] = "12" });
+        var log = new TestLog();
+        var spool = new Spool(_dir);
+        var client = new RaidLedgerClient(new ClientSettings { BaseUrl = $"http://localhost:{_port}" }, () => "t");
+        var up = new Uploader(spool, client, new UploaderSettings { MinInterval = TimeSpan.Zero }, log);
+        var now = DateTime.UtcNow;
+        var png = FixtureOutputTests.IconAtlasBytes();
+        var map = ServerScans.IconMap(png);
+        spool.PutBlob(map.Atlas.Sha256, png, map.Atlas.Width, map.Atlas.Height, now);
+        var recipes = ServerScans.RecipesServerIcons(png);
+        recipes.CapturedAt = MessageJson.Timestamp(now);
+        var r = Enricher.Seal(recipes, "12");
+        Assert.True(r.Ok, r.Reason);
+        Assert.Equal(new[] { map.Atlas.Sha256 }, r.BlobRefs);
+        spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, now);
+
+        await Drive(up, () => spool.PendingCount == 0 && spool.IsBlobUploaded(map.Atlas.Sha256));
+        Assert.True(spool.PendingCount == 0 && spool.IsBlobUploaded(map.Atlas.Sha256), log.ToString());
+        Assert.Equal(0, up.Failed);
+        int blobLine = log.Lines.FindIndex(l => l.Contains("PUT blob") && l.Contains("→ 201"));
+        int recipesLine = log.Lines.FindIndex(l => l.Contains("POST recipes recipes|1.0.20 → 202 accepted"));
+        Assert.True(blobLine >= 0 && recipesLine > blobLine, log.ToString());
+        using var http = new HttpClient();
+        Assert.Contains(map.Atlas.Sha256, await http.GetStringAsync($"http://localhost:{_port}/state"));
+    }
+
+    [Fact]
     public async Task A_blob_with_no_referencing_message_is_uploaded_on_its_own()
     {
         // The base map is rendered at world load, long before any map message references it (found on the first real server run).
