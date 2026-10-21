@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 — 2026-10-21
+
+**Server-only fix** (Raid Ledger ROK-1894). Clients and the modpack need nothing.
+
+- The recipes export's `formula` check now uses the Valheim 1.0.x per-quality cost rule, so `custom`
+  again means "a mod changed this recipe". Measured on the production server (game 1.0.20): an upgrade
+  item (`Upgrader*Armor` / `Upgrader*Weapon`) costs its amount at every quality step, and any other
+  requirement costs `amountPerLevel × 2^(q − 2)` from quality 2 (×1, ×2, ×4), where 0.221.x charged
+  `(q − 1) × amountPerLevel`. 0.4.0 compared against the 0.221 rule and flagged 272 of 479 vanilla recipes
+  as `custom`; on vanilla 1.0.20 the log line now reads `custom formula: 0`. Station and station level are
+  unchanged. 0.221.x servers keep the old rule.
+- No wire-format change: the message is the same; Raid Ledger applies the same rule in its Planner
+  (ROK-1894).
+
 ## 0.4.0 — 2026-10-21
 
 **Piece and station icons in Raid Ledger's Planner.** Needs 0.4.0 on the **server and on at least one

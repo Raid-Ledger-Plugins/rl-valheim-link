@@ -597,6 +597,24 @@ may differ in game"). Recipes with `requireOnlyOneIngredient` list
 alternatives rather than a sum; the planner treats their resources as "any one
 of".
 
+**1.0.x changed `GetAmount` (measured 2026-10-21, ROK-1894).** 0.4.0 flagged 272
+of 479 vanilla 1.0.20 recipes `custom`. A one-off diagnostic build logged live vs
+formula values for every quality of those 272 recipes on the production server
+(test boot, monitors suppressed). Station and station level matched everywhere.
+All 3 982 amounts fit:
+
+```
+1.0.x: GetAmount(q) = m_upgraderResource ? m_amount                      // every quality step
+                    : q <= 1 ? m_amount : m_amountPerLevel * 2^(q - 2)   // ×1, ×2, ×4
+```
+
+For q ≤ 3 this equals the 0.221 rule, which is why recipes without upgrade items that
+stop at q3 matched. Vanilla 1.0.20 has no quality above 4 and every upgrade item
+is `amount 1, amountPerLevel 0`, so q ≥ 5 and other upgrade-item amounts are
+extrapolated; the live check still flags any difference. Since 0.4.1 the export
+checks against the rule of its game version (`Core/UpgradeFormula.cs`), and Raid
+Ledger's Planner applies the same rule (CONTRACT §5b after ROK-1894).
+
 ### 2.4 Size
 
 Vanilla 1.0.x has roughly 600–700 item recipes and 400–500 pieces, about 3–4

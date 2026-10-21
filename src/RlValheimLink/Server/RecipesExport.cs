@@ -102,7 +102,7 @@ namespace RlValheimLink.Server
                     UpgradeOnly = ReadBool(recipe, "m_noCraftOnlyUpgrade") ?? false,
                     AnyOneOf = recipe.m_requireOnlyOneIngredient,
                     QualityResultAmountMultiplier = recipe.m_qualityResultAmountMultiplier,
-                    Formula = MatchesFormula(recipe) ? RecipeFormula.Vanilla : RecipeFormula.Custom,
+                    Formula = MatchesFormula(recipe, gameVersion) ? RecipeFormula.Vanilla : RecipeFormula.Custom,
                 };
                 if (recipe.m_resources != null)
                     foreach (var q in recipe.m_resources)
@@ -266,10 +266,11 @@ namespace RlValheimLink.Server
 
         /// <summary>
         /// True when the live per-quality station level, station and requirement amounts equal the documented
-        /// formula for every quality the result item has; false ("custom") when a mod patched them or a call throws.
+        /// formula of this game version (<see cref="UpgradeFormula"/>, ROK-1894) for every quality the result item
+        /// has; false ("custom") when a mod patched them or a call throws.
         /// Recipe.GetAmount is never called: it reads Player.m_localPlayer.
         /// </summary>
-        private static bool MatchesFormula(Recipe recipe)
+        private static bool MatchesFormula(Recipe recipe, string gameVersion)
         {
             try
             {
@@ -277,12 +278,12 @@ namespace RlValheimLink.Server
                 int maxQ = Math.Max(1, Math.Min(10, shared != null ? shared.m_maxQuality : 1));
                 for (int q = 1; q <= maxQ; q++)
                 {
-                    if (recipe.GetRequiredStationLevel(q) != Math.Max(1, recipe.m_minStationLevel) + (q - 1)) return false;
+                    if (recipe.GetRequiredStationLevel(q) != UpgradeFormula.StationLevel(recipe.m_minStationLevel, q)) return false;
                     var expected = recipe.m_craftingStation != null ? recipe.m_craftingStation : q > 1 ? recipe.m_repairStation : null;
                     if (recipe.GetRequiredStation(q) != expected) return false;
                     if (recipe.m_resources == null) continue;
                     foreach (var res in recipe.m_resources)
-                        if (res != null && res.GetAmount(q) != (q <= 1 ? res.m_amount : (q - 1) * res.m_amountPerLevel)) return false;
+                        if (res != null && res.GetAmount(q) != UpgradeFormula.Amount(gameVersion, res.m_amount, res.m_amountPerLevel, ReadBool(res, "m_upgraderResource") == true, q)) return false;
                 }
                 return true;
             }
