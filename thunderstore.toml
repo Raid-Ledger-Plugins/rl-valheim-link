@@ -8,7 +8,7 @@ name = "ValheimLink"
 # Single source of truth for the version, checked against Directory.Build.props ModVersion and
 # Plugin.Version by CI (tools/thunderstore/check.mjs consistent). Thunderstore refuses to re-upload
 # an existing version, so every shipped change bumps this.
-versionNumber = "0.3.0"
+versionNumber = "0.4.0"
 description = "Links this Valheim server to the group's Raid Ledger: pushes your character, explored map, the item catalogue, chest contents and recipes. Server + client; per-player opt-out in the config."
 websiteUrl = "https://github.com/Raid-Ledger-Plugins/rl-valheim-link"
 containsNsfwContent = false
