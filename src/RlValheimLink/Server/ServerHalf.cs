@@ -22,7 +22,8 @@ namespace RlValheimLink.Server
     /// <summary>
     /// The dedicated-server half (design §4–§6): receive a transfer → inflate under the kind's cap →
     /// enrich with what the server can prove → validate → spool (latest wins) → upload; render the
-    /// base map once per world; ask one client for the items export per (game version, mod set).
+    /// base map once per world; ask one client for the items export per (game version, mod set) and, from
+    /// 0.4.0, one client advertising `pieceIcons` for the piece/station icon atlas of the recipes export.
     /// On a dedicated server it also builds two kinds itself (docs/design-chests.md): the chest scan
     /// (`containers`, on a fixed grid) and the `recipes` export (once per game version + server mod set).
     /// </summary>
@@ -52,6 +53,11 @@ namespace RlValheimLink.Server
         private static RecipesExport _recipes;
         private static DateTime _recipesAt = DateTime.MaxValue;
         private static string _serverModSet;
+        /// <summary>Send the recipes export again although its marker is set: a new piece-icon atlas arrived.</summary>
+        private static bool _recipesForce;
+        // Piece/station icons for the recipes export, rendered by an admin client (0.4.0): the stored map and the request lease.
+        private static PieceIconMap _pieceIcons;
+        private static string _iconsLeasePeer; private static DateTime _iconsLeaseUntil = DateTime.MinValue;
         private static string _recipesStatus = "off";
 
         public static string SpoolDirectory =>
@@ -70,6 +76,7 @@ namespace RlValheimLink.Server
             _dedicated = ZNet.instance != null && ZNet.instance.IsDedicated();
             _chestSchedule = null; _chests = null; _chestScans = 0; _unreadableStreak = 0; _chestStatus = "off";
             _recipes = null; _recipesAt = DateTime.MaxValue; _serverModSet = null; _recipesStatus = "off"; _waitingLogged = false;
+            _recipesForce = false; _pieceIcons = null; _iconsLeasePeer = null; _iconsLeaseUntil = DateTime.MinValue;
             if (_worldIdle)
             {
                 Log.Info($"world '{_worldName}' not in Server.WorldAllowlist; link idle");
@@ -181,7 +188,12 @@ namespace RlValheimLink.Server
                 Log.Info($"chest scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min, the first in {ChestFirstDelay.TotalSeconds:0} s; vehicles {(PluginConfig.ChestsIncludeVehicles.Value ? "included" : "excluded")}; excluded prefabs: {Csv(PluginConfig.ChestsExcludePrefabs.Value)}");
             }
             else Log.Info("chest scan off (Chests.Enabled = false)");
-            if (PluginConfig.RecipesEnabled.Value) { _recipesAt = now.AddSeconds(90); _recipesStatus = "scheduled"; }
+            if (PluginConfig.RecipesEnabled.Value)
+            {
+                _recipesAt = now.AddSeconds(90); _recipesStatus = "scheduled";
+                _pieceIcons = _spool.LoadPieceIcons();
+                if (_pieceIcons != null) Log.Info($"piece icon atlas on file: {_pieceIcons.Icons.Count} icons for game {_pieceIcons.GameVersion}, atlas {_pieceIcons.Sha12}…{(_spool.HasBlob(_pieceIcons.Atlas.Sha256) ? "" : " (blob gone: the next admin client is asked again)")}");
+            }
             else Log.Info("recipes export off (Recipes.Enabled = false)");
         }
 
@@ -263,8 +275,9 @@ namespace RlValheimLink.Server
             if (now < _recipesAt) return;
             if (ObjectDB.instance == null || ZNetScene.instance == null || ObjectDB.instance.m_recipes == null) { _recipesAt = now.AddSeconds(30); return; }
             _recipesAt = DateTime.MaxValue;
-            _serverModSet = ClientHalf.ModSetHash();
-            if (_spool.HasRecipesExport(_gameVersion, _serverModSet))
+            bool force = _recipesForce;
+            _recipesForce = false;
+            if (!force && _spool.HasRecipesExport(_gameVersion, ServerModSet()))
             {
                 _recipesStatus = "sent";
                 Log.Info($"recipes export: already sent for game {_gameVersion} and this server's mod set ({_serverModSet.Substring(0, 12)}…)");
@@ -278,18 +291,83 @@ namespace RlValheimLink.Server
         private static void FinishRecipes(RecipesExport.Result res)
         {
             var msg = RecipesBuilder.Normalise(res.Message, out var rep);
+            string icons;
+            var map = _pieceIcons;
+            if (map == null || map.GameVersion != _gameVersion) icons = "none (no admin client with the piece atlas yet)";
+            else if (!_spool.HasBlob(map.Atlas.Sha256)) icons = "none (the atlas blob is gone; the next admin client is asked again)";
+            else
+            {
+                int applied = PieceIconMap.Apply(msg, map, out int candidates);
+                icons = $"{applied} of {candidates} (atlas {map.Sha12}…)";
+            }
             var r = Enricher.Seal(msg, PluginConfig.ServerId.Value);
             if (!r.Ok) { Log.Error($"recipes export NOT sent, it fails the contract: {Truncate(r.Reason, 400)}"); _recipesStatus = "invalid"; return; }
             var outcome = _spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, DateTime.UtcNow);
-            if (outcome != PutOutcome.DroppedOlder) _spool.MarkRecipesExport(_gameVersion, _serverModSet, r.CapturedAt);
+            if (outcome != PutOutcome.DroppedOlder) _spool.MarkRecipesExport(_gameVersion, ServerModSet(), r.CapturedAt);
             _recipesStatus = "sent";
             Log.Info($"recipes export: {rep.Recipes} recipes, {rep.Pieces} pieces, {rep.Stations} stations, {rep.Processors} processors, {rep.Processes} processes, {rep.Entries} entries, " +
-                $"custom formula: {rep.CustomFormula}, ids renamed: {rep.RenamedIds}, icons: none (dedicated server); {ChestScanner.Ms(res.Ms)} ms over {res.Ticks} ticks (busiest {ChestScanner.Ms(res.BusiestTickMs)} ms); " +
+                $"custom formula: {rep.CustomFormula}, ids renamed: {rep.RenamedIds}, icons: {icons}; {ChestScanner.Ms(res.Ms)} ms over {res.Ticks} ticks (busiest {ChestScanner.Ms(res.BusiestTickMs)} ms); " +
                 $"{r.Key} capturedAt={r.CapturedAt} {r.Bytes.Length} bytes → {outcome}");
             if (rep.Dropped)
                 Log.Warn($"recipes export: dropped to fit the contract: {rep.DroppedRecipes} recipes, {rep.DroppedPieces} pieces, {rep.DroppedStations} stations, {rep.DroppedProcessors} processors (no usable conversion), {rep.DroppedProcesses} processes, {rep.DroppedResources} requirements");
             if (rep.DanglingStations > 0 || rep.SplitProcesses > 0 || rep.MergedResources > 0)
                 Log.Debug($"recipes export: {rep.DanglingStations} unknown station reference(s) cleared, {rep.SplitProcesses} obliterator conversion(s) split into groups of {Caps.ProcessInputsMax}, {rep.MergedResources} duplicate requirement(s) summed");
+        }
+
+        /// <summary>The server's own mod-set hash (BepInEx plugin GUIDs + versions), the key of the recipes and piece-icon markers.</summary>
+        private static string ServerModSet() => _serverModSet ?? (_serverModSet = ClientHalf.ModSetHash());
+
+        /// <summary>A usable piece-icon map: this game version, this server's mod set, and its atlas still known to the spool.</summary>
+        private static bool HavePieceIcons() =>
+            _pieceIcons != null && _pieceIcons.GameVersion == _gameVersion && _pieceIcons.ServerModSet == ServerModSet() && _spool.HasBlob(_pieceIcons.Atlas.Sha256);
+
+        private static void MaybeRequestPieceIcons(long sender, PeerFacts facts, string gameVersion, JArray features)
+        {
+            if (!_dedicated || !PluginConfig.RecipesEnabled.Value || features == null) return;
+            bool can = false;
+            foreach (var f in features) if (f is JValue v && v.Type == JTokenType.String && (string)v == "pieceIcons") can = true;
+            if (!can || gameVersion != _gameVersion || !MayExport(facts) || HavePieceIcons()) return;
+            var now = DateTime.UtcNow;
+            if (_iconsLeasePeer != null && now < _iconsLeaseUntil) return;
+            _iconsLeasePeer = sender.ToString(); _iconsLeaseUntil = now.AddMinutes(10);
+            Log.Info($"peer {sender}: asking for the piece icon atlas (game {gameVersion})");
+            LinkChannel.SendControl(sender, "needPieceIcons", $"game={gameVersion}");
+        }
+
+        /// <summary>Server.ItemsExportBy governs every client-rendered export: the items catalogue and the piece icon atlas.</summary>
+        private static bool MayExport(PeerFacts facts)
+        {
+            string who = PluginConfig.ItemsExportBy.Value;
+            return !(who == "nobody" || (who == "admins" && !facts.IsAdmin));
+        }
+
+        private static void OnPieceIcons(long sender, PeerFacts facts, byte[] gz)
+        {
+            if (!_dedicated || !PluginConfig.RecipesEnabled.Value) { Log.Debug($"peer {sender}: piece icons dropped (no recipes export here)"); return; }
+            if (!MayExport(facts)) { Log.Warn($"peer {sender}: piece icons dropped, Server.ItemsExportBy does not allow this client"); return; }
+            byte[] json = Inflate(gz, LinkChannel.PieceIconsMaxBytes);
+            if (json == null) { Log.Warn($"peer {sender}: piece icons gzip invalid or over {LinkChannel.PieceIconsMaxBytes} bytes; dropped"); return; }
+            if (!PieceIconMap.TryParse(json, out var map, out string error))
+            {
+                Log.Warn($"peer {sender}: piece icons rejected: {error}");
+                LinkChannel.SendControl(sender, "reject", "pieceIcons: " + Truncate(error, 120));
+                return;
+            }
+            if (map.GameVersion != _gameVersion) { Log.Warn($"peer {sender}: piece icons for game {map.GameVersion} != server {_gameVersion}; dropped"); return; }
+            if (!_spool.HasBlob(map.Atlas.Sha256))
+            {
+                Log.Warn($"peer {sender}: piece icons reference atlas {map.Sha12}… which never arrived; dropped");
+                LinkChannel.SendControl(sender, "reject", "pieceIcons: atlas blob missing");
+                return;
+            }
+            map.ServerModSet = ServerModSet();
+            _spool.SavePieceIcons(map);
+            _pieceIcons = map;
+            _iconsLeasePeer = null;
+            Log.Info($"peer {sender}: piece icon atlas stored: {map.Icons.Count} icons ({map.Rejected} rejected), atlas {map.Sha12}… {map.Atlas.Width}x{map.Atlas.Height}; the recipes export is sent again with icons");
+            LinkChannel.SendControl(sender, "ack", $"pieceIcons {map.Icons.Count}");
+            // A running export picks the new map up when it finishes; otherwise send it again now.
+            if (_recipes == null || !_recipes.Running) { _recipesForce = true; _recipesAt = DateTime.UtcNow; }
         }
 
         private static HashSet<string> CsvSet(string csv)
@@ -325,6 +403,7 @@ namespace RlValheimLink.Server
                     case PayloadKind.Character:
                     case PayloadKind.Map:
                     case PayloadKind.Items: OnMessage(sender, facts, kind, payload); return;
+                    case PayloadKind.PieceIcons: OnPieceIcons(sender, facts, payload); return;
                 }
             }
             catch (Exception e) { Log.Error($"peer {sender}: {kind} handling failed", e); }
@@ -342,14 +421,14 @@ namespace RlValheimLink.Server
             if (PluginConfig.RequireExactModVersion.Value && modVersion != Plugin.Version) { LinkChannel.SendControl(sender, "reject", $"modVersion {modVersion} != server {Plugin.Version}"); return; }
             if (modVersion != Plugin.Version) Log.Info($"peer {sender}: client mod {modVersion} differs from server {Plugin.Version}; same protocol, accepted");
             MaybeRequestItems(sender, facts, gameVersion, modSetHash);
+            MaybeRequestPieceIcons(sender, facts, gameVersion, hello["features"] as JArray);
         }
 
         private static void MaybeRequestItems(long sender, PeerFacts facts, string gameVersion, string modSetHash)
         {
             if (string.IsNullOrEmpty(gameVersion) || string.IsNullOrEmpty(modSetHash)) return;
             if (_spool.HasItemsExport(gameVersion, modSetHash)) return;
-            string who = PluginConfig.ItemsExportBy.Value;
-            if (who == "nobody" || (who == "admins" && !facts.IsAdmin)) return;
+            if (!MayExport(facts)) return;
             var now = DateTime.UtcNow;
             if (_itemsLeasePeer != null && now < _itemsLeaseUntil) return;
             _itemsLeasePeer = sender.ToString(); _itemsLeaseUntil = now.AddMinutes(10);

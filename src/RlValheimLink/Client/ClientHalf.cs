@@ -34,6 +34,7 @@ namespace RlValheimLink.Client
             _active = false;
             LinkChannel.ControlReceived -= OnControl;
             ItemsCapture.Cancel();
+            PieceIconsCapture.Cancel();
         }
 
         public static void Tick()
@@ -52,9 +53,14 @@ namespace RlValheimLink.Client
                 ["modVersion"] = Plugin.Version,
                 ["gameVersion"] = GameInfo.GameVersion(),
                 ["modSetHash"] = ModSetHash(),
+                // Optional work this client can do on request; older servers ignore the field (0.4.0).
+                ["features"] = new Newtonsoft.Json.Linq.JArray(Features),
             };
             LinkChannel.Send(PayloadKind.Hello, MessageJson.Utf8NoBom.GetBytes(hello.ToString(Newtonsoft.Json.Formatting.None)), "hello");
         }
+
+        /// <summary>Hello capability flags. `pieceIcons`: renders the piece/station icon atlas for the recipes export (`needPieceIcons`).</summary>
+        public static readonly string[] Features = { "pieceIcons" };
 
         /// <summary>SHA-256 of the loaded BepInEx plugin GUIDs + versions: the server asks for a new items export when it changes.</summary>
         public static string ModSetHash()
@@ -101,7 +107,7 @@ namespace RlValheimLink.Client
 
             // Logout and quit save with setLogoutPoint = true and close the connection in this same frame:
             // push the small snapshots out now (big transfers are dropped; the server re-asks next session).
-            if (setLogoutPoint) { ItemsCapture.Cancel(); LinkChannel.FlushForLogout(); }
+            if (setLogoutPoint) { ItemsCapture.Cancel(); PieceIconsCapture.Cancel(); LinkChannel.FlushForLogout(); }
         }
 
         /// <summary>Validate → serialise → size check → gzip → queue. Returns false (and logs why) when nothing was sent.</summary>
@@ -130,12 +136,17 @@ namespace RlValheimLink.Client
                     Log.Info("server asked for an items export (" + arg + ")");
                     ItemsCapture.Start(arg);
                     break;
+                case "needPieceIcons":
+                    Log.Info("server asked for the piece icon atlas (" + arg + ")");
+                    PieceIconsCapture.Start(arg);
+                    break;
                 case "reject":
                     if (arg != null && arg.StartsWith("hello: ", StringComparison.Ordinal))
                     {
                         // The server declined this session as a whole (e.g. the world is not in its Server.WorldAllowlist): capture nothing more.
                         _active = false;
                         ItemsCapture.Cancel();
+                        PieceIconsCapture.Cancel();
                         Log.Warn("server declined this client; nothing is sent this session: " + arg.Substring(7));
                         break;
                     }

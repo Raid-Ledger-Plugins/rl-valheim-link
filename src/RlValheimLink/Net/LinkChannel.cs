@@ -4,7 +4,8 @@ using RlValheimLink.Contract;
 
 namespace RlValheimLink.Net
 {
-    public enum PayloadKind : byte { Hello = 0, Character = 1, Map = 2, Items = 3, Blob = 4 }
+    /// <summary>Transfer kinds. PieceIcons (0.4.0) is the admin client's piece/station icon map for the recipes export; older servers drop it (no cap).</summary>
+    public enum PayloadKind : byte { Hello = 0, Character = 1, Map = 2, Items = 3, Blob = 4, PieceIcons = 5 }
 
     /// <summary>
     /// Chunked transfers over the vanilla routed RPC (docs/design.md §3). Client → server carries
@@ -17,6 +18,8 @@ namespace RlValheimLink.Net
         public const string RpcControl = "RLVL_Control";
         public const int Protocol = 1;
         public const int ChunkSize = 32 * 1024;
+        /// <summary>Cap of a PieceIcons payload, gzip on the wire and inflated JSON alike (≈ 40 B per icon; 8 192 icons ≈ 330 KB).</summary>
+        public const int PieceIconsMaxBytes = 1024 * 1024;
         private const int ChunksPerTick = 8;
         private const int MaxSendQueueBytes = 256 * 1024;
         private const float IncomingTimeoutSeconds = 60f;
@@ -33,6 +36,7 @@ namespace RlValheimLink.Net
                 case PayloadKind.Map: return Caps.MapMaxBytes;
                 case PayloadKind.Items: return Caps.ItemsMaxBytes;
                 case PayloadKind.Blob: return Caps.BinaryMaxBytes;
+                case PayloadKind.PieceIcons: return PieceIconsMaxBytes;
                 default: return 0;
             }
         }
