@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 — 2026-10-21
+
+**Server-only update** (ROK-1879): install it on the dedicated server. Clients do not need it; the RPC
+protocol is unchanged, so 0.2.x clients keep working against it and a 0.3.0 client behaves exactly like
+0.2.3.
+
+- **Chest scan → `containers`** (Raid Ledger ROK-1853, the hub's Materials tab). On a dedicated server,
+  2 minutes after start and then every 10 minutes on a fixed grid (`[Chests] IntervalMinutes`, 5–120),
+  the server reads every player-built container from the world's ZDOs (chests, barrels, wardrobes,
+  personal chests, carts and ships; no player needs to be online or nearby) and sends one `containers`
+  snapshot for the world, every time, even when nothing changed. Per container: prefab, position (0.1 m),
+  creator's playerId, privacy (personal chests stay `private`: owner and admins only on Raid Ledger), slots
+  and used slots, stacks summed per (item, quality). World-generated chests (no creator), loot chests,
+  tombstones and the obliterator (`[Chests] ExcludePrefabs`) are never sent; a chest the game cannot
+  decode is sent as `unreadable` with no items; the contract's caps (256 entries per chest, 4 096 chests,
+  50 000 entries) are applied by dropping, never by sending an invalid message. Time-sliced: one ZDO
+  query per server tick, then about 200 decoded stacks per tick (production world: busiest tick ~1.3 ms).
+  Respects `[Server] WorldAllowlist` (an unlisted world is not scanned) and the upload budgets; a scan
+  whose message failed the contract is logged and not sent. `[Chests] Enabled = false` switches it off.
+- **Recipes export → `recipes`** (Raid Ledger ROK-1854, the hub's Planner tab). About 90 s after start,
+  once per game version and server mod set, the server sends its crafting recipes (raw requirement
+  fields, `upgradeOnly`, 1.0.20 upgrade items, a `custom` flag where a mod changed the per-quality
+  cost), build pieces of every build tool, crafting stations with their max level and the processing
+  steps of smelters, kilns, the windmill, spinning wheel, eitr refinery, fermenter, cooking stations,
+  oven and obliterator. Read on the server, so it needs no admin client. A dedicated server cannot render
+  sprites, so this export carries **no piece or station icons** (`atlas: null`); item names and icons
+  still come from the items catalogue. `[Recipes] Enabled = false` switches it off.
+- `[Chests] Dump` (the 0.2.1 spike diagnostic) is retired: it is now `[Chests] DiagnosticDump`, **off**
+  by default; the old `Dump` key is ignored.
+- Log lines (exact text in `docs/operator-checklist.md` section H): `RLVL: chest scan on: …`,
+  `RLVL: chest scan <n>: <c> containers … → Accepted`, `RLVL: recipes export: <r> recipes, …`, and the
+  uploader's `RLVL: POST containers containers|<world> → 202 accepted` / `POST recipes recipes|<game> → 202 accepted`.
+
 ## 0.2.3 — 2026-10-20
 
 - No change to what the mod does in game or sends to Raid Ledger; the plugin code is the same as 0.2.2.

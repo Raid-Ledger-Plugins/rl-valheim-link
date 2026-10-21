@@ -22,9 +22,9 @@ Ledger env with ROK-1833 exists, run `tools/mock-ingest` somewhere the server ca
    `RLVL: base map queued for upload (<bytes> bytes)` and, once the uploader runs,
    `RLVL: PUT blob <12 hex>… → 201 stored in <ms> ms`. Paste back the four base-map lines and how long the
    server tick stalled while rendering (watch the console; design §2 says this is UNVERIFIED).
-   From 0.2.1 a dedicated server also logs `RLVL: chestdump: ON (Chests.Dump, default on) — …` and runs
-   the chest diagnostic of section G two minutes after start; set `[Chests] Dump = false` while timing
-   the base map if you want to keep the two apart.
+   From 0.2.1 to 0.2.3 a dedicated server also logs `RLVL: chestdump: ON (Chests.Dump, default on) — …` and runs
+   the chest diagnostic of section G two minutes after start. From 0.3.0 the diagnostic is off
+   (`[Chests] DiagnosticDump`) and the chest scan and recipes export of section H run instead.
 2. Start your client (modded profile) and join the test world. Client log:
    `RLVL: ZNet up: server=False client=True dedicated=False`
    `RLVL: client half active (sendCharacter=True sendMap=True iconSize=64)`
@@ -209,3 +209,45 @@ What each check prints (paste back all of them; step 16):
     `RLVL: peer <uid>: character character|<steamId>|<playerId> …` from step 14, what you placed in step 12
     (chest, prefab if you know it, contents), what you moved in step 14 and roughly when, and whether
     anything in the chests looked different in game afterwards.
+
+## H. Chest scan and recipes export (0.3.0; dedicated server only, no client update)
+
+Install 0.3.0 on the **server** only (clients stay on 0.2.x: the RPC protocol did not change). The world
+must be in `[Server] WorldAllowlist` (or the list empty) and `[RaidLedger]` must be set; nothing else to
+configure. Restart the server when convenient; every time below counts from the start.
+
+17. **Start.** Besides the section A lines, expect
+    `RLVL: loaded v0.3.0 (contract v1); game member access ok; …` and, right after `server half active`,
+    `RLVL: chest scan on: every 10 min, the first in 120 s; vehicles included; excluded prefabs: incinerator`.
+    No `RLVL: chestdump` lines any more (unless `[Chests] DiagnosticDump = true`). If you see
+    `RLVL: chest scan and recipes export wait for the [RaidLedger] settings`, the settings are missing.
+18. **Recipes, ~90 s after start** (first start on this game version and mod set only):
+    `RLVL: recipes export: <r> recipes, <p> pieces, <k> stations, <x> processors, <y> processes, <e> entries, custom formula: <c>, ids renamed: <n>, icons: none (dedicated server); <ms> ms over 4 ticks (busiest <ms> ms); recipes|1.0.20 capturedAt=<time> <bytes> bytes → Accepted`,
+    then from the uploader `RLVL: POST recipes recipes|1.0.20 → 202 accepted in <ms> ms`.
+    Expect about 481 recipes, 552 pieces, 10 stations and 12 processors on vanilla 1.0.20 (BatteringRam,
+    piece_FrostKiln and piece_bathtub have no usable conversion and are left out). On a later start:
+    `RLVL: recipes export: already sent for game 1.0.20 and this server's mod set (<12 hex>…)`.
+    A `RLVL: recipes export: dropped to fit the contract: …` WARN is worth pasting back.
+19. **First chest scan, ~2 min after start:**
+    `RLVL: chest scan: <n> container prefabs (<v> vehicles): Cart(vehicle),Karve(vehicle),…,piece_chest_private(personal),…`
+    (vanilla 1.0.20: 17 prefabs, 4 vehicles), then, after about 20 s of ticks,
+    `RLVL: chest scan 1: <c> containers (<v> vehicles, <p> personal), <s> stacks in <e> entries, <d> dropped, <dup> duplicates removed, <g> gone mid-scan, <c0> not player-built, <m> merged, <u> unreadable, <o> omitted; <ms> ms over <k> ticks (busiest <ms> ms); containers|<world uid> capturedAt=<time> <bytes> bytes → Accepted`
+    and `RLVL: POST containers containers|<world uid> → 202 accepted in <ms> ms`. The 0.2.1 dump
+    counted 111 player-built containers (4 on ships) and 524 stacks on the production world; `<c>` and
+    `<s>` should be in that range. Note whether the game stuttered while it ran (`busiest`).
+20. **Every 10 minutes** the same `chest scan <n>` and `POST containers` lines repeat with the next
+    `capturedAt` (on the grid: start + 2, 12, 22 … min), even when nothing changed. A
+    `RLVL: chest scan: <n> slot(s) skipped …` line means a scan was still running or the server stalled.
+21. **Raid Ledger.** The Raid Ledger Lead checks the production API log for
+    `valheim-link ingest kind=recipes … result=accepted` and `valheim-link ingest kind=containers … result=accepted`
+    and no `schema_invalid`. Then, in the Valheim hub: **Materials** lists the chest contents within one
+    interval (a personal chest only for its owner and admins), and **Planner** resolves a recipe (e.g.
+    Bronze → Copper + Tin → ores + coal at the smelter) against them. Planner pieces and stations show no
+    icon (the server cannot render sprites); item icons come from the items catalogue.
+22. **Freshness.** Move 10 Wood from one chest to another, wait for the next `chest scan <n>` line and the
+    importer (≤ 30 s), reload Materials: the two chests show the change, the Wood total does not.
+23. **Problems to paste back whole:** `RLVL: chest scan aborted …`, `RLVL: chest scan <n>: containers message NOT sent …`,
+    `RLVL: recipes export NOT sent …`, `RLVL: recipes export aborted …`, any WARN starting `RLVL: chest scan`,
+    and any `POST containers` / `POST recipes` line that is not `202` (a `400 schema_invalid […]` names the
+    failing path).
+

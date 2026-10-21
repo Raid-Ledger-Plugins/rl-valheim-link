@@ -1,7 +1,8 @@
 # RL Valheim Link
 
 A BepInEx 5 mod for Valheim (client + dedicated server) that exports a player's character
-summary, explored map and pins, and the item name/icon catalogue, and pushes them to a
+summary, explored map and pins, the item name/icon catalogue, and (from the dedicated server)
+chest contents and recipes, and pushes them to a
 [Raid Ledger](https://github.com/sjdodge123/Raid-Ledger) instance. Story **ROK-1834**; design
 background ROK-1799; wire contract ROK-1829; ingest endpoint ROK-1833 (merged 2026-10-18).
 Thunderstore package: `GamerSaloon-ValheimLink` (published by the operator's GamerSaloon team).
@@ -24,7 +25,8 @@ changes it, validates every message against it, and CI fails when the copy drift
 | Client half: character / map / items captures, hello, opt-out, console | done (needs in-game verification: [`docs/operator-checklist.md`](docs/operator-checklist.md)) |
 | Transport: chunked routed RPC with caps and rate limits | done |
 | Server half: receive → enrich → validate → dedupe → spool → upload (+ base-map render) | done; `RlValheimLink.Core` is tested end to end against the mock, the game glue needs the in-game checklist; a Raid Ledger fleet env with a per-server token is the final acceptance target |
-| Thunderstore packaging + release workflow | done (untagged) |
+| Server-built kinds: chest scan (`containers`) and recipes export (`recipes`), ROK-1879 | done in 0.3.0; Core builders tested against the mock, the game glue needs checklist section H |
+| Thunderstore packaging + release workflow | done |
 
 ## Read first
 
