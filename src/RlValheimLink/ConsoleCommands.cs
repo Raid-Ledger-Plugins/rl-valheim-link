@@ -4,7 +4,7 @@ using RlValheimLink.Net;
 
 namespace RlValheimLink
 {
-    /// <summary>`rlvl status|export items|export now` in the F5 console (client).</summary>
+    /// <summary>`rlvl status|export items|export icons|export now` in the F5 console (client).</summary>
     internal static class ConsoleCommands
     {
         private static bool _registered;
@@ -26,7 +26,7 @@ namespace RlValheimLink
                 {
                     var pt = parameters[i].ParameterType;
                     if (i == 0) args[i] = "rlvl";
-                    else if (i == 1) args[i] = "RL Valheim Link: rlvl status | rlvl export now | rlvl export items";
+                    else if (i == 1) args[i] = "RL Valheim Link: rlvl status | rlvl export now | rlvl export items | rlvl export icons";
                     else if (pt == typeof(Terminal.ConsoleEvent)) args[i] = handler;
                     else if (pt == typeof(bool)) args[i] = false;
                     else args[i] = null;
@@ -54,7 +54,7 @@ namespace RlValheimLink
             switch (sub)
             {
                 case "status":
-                    args.Context.AddString($"RLVL v{Plugin.Version}: server={Roles.IsServer} client={Roles.IsClient} optOut={PluginConfig.OptOut.Value} queued={LinkChannel.QueuedTransfers} itemsExport={(ItemsCapture.IsRunning ? "running" : "idle")}");
+                    args.Context.AddString($"RLVL v{Plugin.Version}: server={Roles.IsServer} client={Roles.IsClient} optOut={PluginConfig.OptOut.Value} queued={LinkChannel.QueuedTransfers} itemsExport={(ItemsCapture.IsRunning ? "running" : "idle")} pieceIcons={(PieceIconsCapture.IsRunning ? "running" : "idle")}");
                     if (Roles.IsServer) args.Context.AddString("RLVL server: " + Server.ServerHalf.Status());
                     break;
                 case "export" when sub2 == "now":
@@ -67,8 +67,13 @@ namespace RlValheimLink
                     args.Context.AddString("RLVL: items export started (see the log)");
                     ItemsCapture.Start("console");
                     break;
+                case "export" when sub2 == "icons":
+                    if (!Roles.IsClient) { args.Context.AddString("RLVL: not a client"); break; }
+                    args.Context.AddString("RLVL: piece icon export started (see the log); the server uses it only from a client Server.ItemsExportBy allows");
+                    PieceIconsCapture.Start("console");
+                    break;
                 default:
-                    args.Context.AddString("usage: rlvl status | rlvl export now | rlvl export items");
+                    args.Context.AddString("usage: rlvl status | rlvl export now | rlvl export items | rlvl export icons");
                     break;
             }
         }

@@ -160,4 +160,31 @@ public static class ServerScans
     }
 
     public static RecipesMessage RecipesServer() => RecipesBuilder.Normalise(RecipesRaw(), out _);
+
+    // ---------- piece/station icon atlas (0.4.0, rendered by an admin client) ----------
+
+    /// <summary>The prefabs the admin client's atlas covers, in atlas order (piece_stonecutter has no icon, to show a partial atlas).</summary>
+    public static readonly string[] IconPrefabs =
+        { "UpgradeStation", "blackforge", "fermenter", "forge", "piece_cauldron", "piece_chest_private", "piece_chest_wood", "piece_workbench", "sapling_turnip", "smelter" };
+
+    public const int IconSize = 64, IconsPerRow = 4;
+
+    public static byte[] IconAtlasPng() => SyntheticCaptures.AtlasPng(IconPrefabs.Length, IconSize, IconsPerRow);
+
+    /// <summary>What PieceIconsCapture sends: the atlas ref and a rect per prefab (AtlasBuilder's grid).</summary>
+    public static PieceIconMap IconMap(byte[] atlasPng)
+    {
+        var map = new PieceIconMap { GameVersion = GameVersion, Atlas = Png.MakeRef(atlasPng) };
+        for (int i = 0; i < IconPrefabs.Length; i++)
+            map.Icons[IconPrefabs[i]] = new[] { (i % IconsPerRow) * IconSize, (i / IconsPerRow) * IconSize, IconSize, IconSize };
+        return map;
+    }
+
+    /// <summary>The server's recipes export with the stored icon map applied (ServerHalf.FinishRecipes).</summary>
+    public static RecipesMessage RecipesServerIcons(byte[] atlasPng)
+    {
+        var msg = RecipesServer();
+        PieceIconMap.Apply(msg, IconMap(atlasPng), out _);
+        return msg;
+    }
 }

@@ -251,3 +251,35 @@ configure. Restart the server when convenient; every time below counts from the 
     and any `POST containers` / `POST recipes` line that is not `202` (a `400 schema_invalid […]` names the
     failing path).
 
+
+## I. Planner icons from an admin client (0.4.0; server and one admin client)
+
+Install 0.4.0 on the **server** and on **your client** (you must be allowed by `[Server] ItemsExportBy`:
+by default listed in `adminlist.txt`). Other players can stay on older versions.
+
+24. **Server start.** Section H's lines, and on the first 0.4.0 start the recipes export says
+    `… icons: none (no admin client with the piece atlas yet); …`. Once a map is on file, later starts also log
+    `RLVL: piece icon atlas on file: <n> icons for game 1.0.20, atlas <12 hex>…`.
+25. **Join as the admin.** Server:
+    `RLVL: peer <uid>: hello mod=0.4.0 protocol=1 game=1.0.20 … admin=True` and
+    `RLVL: peer <uid>: asking for the piece icon atlas (game 1.0.20)`.
+    Client:
+    `RLVL: server asked for the piece icon atlas (game=1.0.20)`,
+    `RLVL: piece icon export: <n> piece and station icon(s), reason game=1.0.20` (vanilla ≈ 560),
+    `RLVL: queued piece atlas 2048x<h> sha256=<12 hex>…: transfer #<id> Blob <bytes> bytes in <k> chunk(s)` and
+    `RLVL: queued piece icons (count=<n> atlas=<bytes> bytes at 64 px) exported in <ms> ms: transfer #<id> PieceIcons <bytes> bytes in 1 chunk(s)`.
+    Expect a hitch of a second or two on your client while the atlas is drawn, as with the items export.
+26. **Server receives it:**
+    `RLVL: peer <uid>: blob <12 hex>… 2048x<h> <bytes> bytes spooled`, then
+    `RLVL: peer <uid>: piece icon atlas stored: <n> icons (0 rejected), atlas <12 hex>… 2048x<h>; the recipes export is sent again with icons`,
+    and within a few seconds
+    `RLVL: recipes export: … icons: <a> of <m> (atlas <12 hex>…); … recipes|1.0.20 capturedAt=<time> <bytes> bytes → Accepted`,
+    `RLVL: PUT blob <12 hex>… → 201 stored in <ms> ms` and `RLVL: POST recipes recipes|1.0.20 → 202 accepted in <ms> ms`.
+    `<a>` close to `<m>` is right: pieces or stations without a sprite get no icon.
+27. **Raid Ledger:** reload the Planner; build pieces and crafting stations now show their icons.
+28. **Next joins and restarts:** no new `asking for the piece icon atlas` line until the game version or the
+    server's mod set changes. To force a new atlas, type `rlvl export icons` in your F5 console (lines of step 25 from
+    "piece icon export" on, then step 26).
+29. **Problems to paste back:** `RLVL: peer <uid>: piece icons rejected: …`,
+    `… piece icons reference atlas <12 hex>… which never arrived; dropped`, `… piece icons dropped, Server.ItemsExportBy does not allow this client`,
+    and on the client `RLVL: server rejected a transfer: pieceIcons: …` or `piece icon export: no atlas could be built; nothing sent`.

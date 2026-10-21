@@ -61,6 +61,10 @@ leaves your PC except through the game server you are playing on.
   unaffected. `[Chests] Enabled = false` / `[Recipes] Enabled = false` switch them off;
   `[Chests] IntervalMinutes` (5–120) sets the scan interval. The 0.2.1 chest diagnostic is now off
   (`[Chests] DiagnosticDump`).
+- **Planner icons (0.4.0+):** the server cannot draw the icons of build pieces and crafting stations, so
+  it asks the first admin with the 0.4.0 client (`[Server] ItemsExportBy`) to render them once per game
+  version and server mod set, then re-sends the recipes with icons. `rlvl export icons` in the F5 console
+  forces it. Without a 0.4.0 admin client the Planner works, just without those icons.
 - `rlvl status` in a client's F5 console (launch option `-console`) prints what the mod is doing.
 
 ## Privacy

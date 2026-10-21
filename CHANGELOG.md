@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — 2026-10-21
+
+**Piece and station icons in Raid Ledger's Planner.** Needs 0.4.0 on the **server and on at least one
+admin's client** for the icons. Without it nothing breaks: a 0.4.0 server with older clients, or a 0.3.0
+server with 0.4.0 clients, keeps sending recipes without icons, as in 0.3.0. The RPC protocol is
+unchanged.
+
+- Client: the hello now advertises `features: ["pieceIcons"]`. When the server asks (`needPieceIcons`),
+  the client copies the icon of every build piece and crafting station into one atlas PNG (64 px, 32 per
+  row, smaller when the PNG would exceed `[Upload] MaxBlobBytes`), the same way as the items export.
+  It sends the PNG to the server, then the map of which rect belongs to which prefab (a new internal
+  transfer kind, about 30 KB).
+  `rlvl export icons` in the F5 console starts it by hand.
+- Server: asks one client for the atlas when it has none for this game version and server mod set. The
+  client must advertise the feature, run the same game version and be allowed by `[Server] ItemsExportBy`
+  (default: admins); one request at a time, a 10-minute lease.
+  When the atlas and map arrive, the server keeps the map in `spool/piece-icons.json` and sends the
+  recipes export again at once with an icon on every station and piece it covers. Later exports for the
+  same game version reuse the map.
+  The atlas PNG is uploaded to Raid Ledger before the recipes message that references it. The export's
+  log line now says `icons: <n> of <m> (atlas <sha>…)`, or why there are none.
+- No contract change: atlas icons and the recipes `atlas` ref are part of v1 (CONTRACT.md §5b).
+
 ## 0.3.0 — 2026-10-21
 
 **Server-only update** (ROK-1879): install it on the dedicated server. Clients do not need it; the RPC

@@ -25,7 +25,7 @@ changes it, validates every message against it, and CI fails when the copy drift
 | Client half: character / map / items captures, hello, opt-out, console | done (needs in-game verification: [`docs/operator-checklist.md`](docs/operator-checklist.md)) |
 | Transport: chunked routed RPC with caps and rate limits | done |
 | Server half: receive → enrich → validate → dedupe → spool → upload (+ base-map render) | done; `RlValheimLink.Core` is tested end to end against the mock, the game glue needs the in-game checklist; a Raid Ledger fleet env with a per-server token is the final acceptance target |
-| Server-built kinds: chest scan (`containers`) and recipes export (`recipes`), ROK-1879 | done in 0.3.0; Core builders tested against the mock, the game glue needs checklist section H |
+| Server-built kinds: chest scan (`containers`) and recipes export (`recipes`), ROK-1879 | done in 0.3.0; Core builders tested against the mock, the game glue needs checklist section H. Piece/station icons from an admin client: 0.4.0, checklist section I |
 | Thunderstore packaging + release workflow | done |
 
 ## Read first

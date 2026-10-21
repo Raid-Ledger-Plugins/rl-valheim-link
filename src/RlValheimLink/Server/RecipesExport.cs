@@ -12,8 +12,9 @@ namespace RlValheimLink.Server
     /// The `recipes` export (docs/design-chests.md §2), read on the dedicated server from ObjectDB.m_recipes,
     /// the build tools' piece tables and the stations' prefabs in ZNetScene. Game glue only: ids, references,
     /// sorting and caps are <see cref="RecipesBuilder"/>'s. A dedicated server has no GPU path for sprites
-    /// (docs/design.md §2), so the export carries no icons (`atlas: null`, every icon null); item names and
-    /// icons come from the `items` catalogue. One phase per tick.
+    /// (docs/design.md §2), so the export itself carries no icons; ServerHalf applies the piece-icon atlas an
+    /// admin client rendered (<see cref="Core.PieceIconMap"/>), when it has one. Item names and icons come
+    /// from the `items` catalogue. One phase per tick.
     /// </summary>
     internal sealed class RecipesExport
     {
@@ -75,7 +76,7 @@ namespace RlValheimLink.Server
                 foreach (var ext in go.GetComponentsInChildren<StationExtension>(true))
                 {
                     if (ext == null || ext.m_craftingStation == null) continue;
-                    string target = StationPrefab(ext.m_craftingStation);
+                    string target = RecipeSources.StationPrefab(ext.m_craftingStation);
                     if (target == null) continue;
                     if (!extensions.TryGetValue(target, out var set)) extensions[target] = set = new HashSet<string>(StringComparer.Ordinal);
                     set.Add(go.name);
@@ -120,27 +121,19 @@ namespace RlValheimLink.Server
             yield return null; tick.Restart();
 
             // Phase 3: build pieces, from every build tool's piece table (the first tool that lists a piece owns it).
-            var pieceSeen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var go in ObjectDB.instance.m_items)
+            foreach (var bp in RecipeSources.BuildPieces())
             {
-                var drop = go != null ? go.GetComponent<ItemDrop>() : null;
-                var table = drop != null && drop.m_itemData != null && drop.m_itemData.m_shared != null ? drop.m_itemData.m_shared.m_buildPieces : null;
-                if (table == null || table.m_pieces == null) continue;
-                foreach (var pgo in table.m_pieces)
+                var piece = bp.Piece;
+                var def = new PieceDef
                 {
-                    var piece = pgo != null ? pgo.GetComponent<Piece>() : null;
-                    if (piece == null || !pieceSeen.Add(pgo.name)) continue;
-                    var def = new PieceDef
-                    {
-                        Prefab = pgo.name, Name = Localize(piece.m_name), Category = piece.m_category.ToString(), Tool = go.name,
-                        Station = piece.m_craftingStation != null ? AddStation(stations, piece.m_craftingStation) : null, Icon = null,
-                    };
-                    if (piece.m_resources != null)
-                        foreach (var q in piece.m_resources)
-                            if (q != null && q.m_resItem != null)
-                                def.Resources.Add(new PieceResource { Prefab = q.m_resItem.gameObject.name, Amount = q.m_amount, Recover = q.m_recover });
-                    msg.Pieces.Add(def);
-                }
+                    Prefab = bp.Prefab.name, Name = Localize(piece.m_name), Category = piece.m_category.ToString(), Tool = bp.Tool,
+                    Station = piece.m_craftingStation != null ? AddStation(stations, piece.m_craftingStation) : null, Icon = null,
+                };
+                if (piece.m_resources != null)
+                    foreach (var q in piece.m_resources)
+                        if (q != null && q.m_resItem != null)
+                            def.Resources.Add(new PieceResource { Prefab = q.m_resItem.gameObject.name, Amount = q.m_amount, Recover = q.m_recover });
+                msg.Pieces.Add(def);
             }
             r.BusiestTickMs = Math.Max(r.BusiestTickMs, tick.Elapsed.TotalMilliseconds); r.Ticks++;
             yield return null; tick.Restart();
@@ -171,16 +164,13 @@ namespace RlValheimLink.Server
 
         // ---------- stations ----------
 
-        /// <summary>A station's id is its prefab: the root of the object the CraftingStation sits on (UpgradeStation carries a second, child station).</summary>
-        private static string StationPrefab(CraftingStation cs) => cs == null ? null : Names.Prefab(cs.transform.root.gameObject.name);
-
         private static string AddStation(Dictionary<string, CraftingStationDef> stations, CraftingStation cs)
         {
-            string prefab = StationPrefab(cs);
+            string prefab = RecipeSources.StationPrefab(cs);
             if (prefab == null) return null;
             if (stations.ContainsKey(prefab)) return prefab;
             // Recipes can reference a station on a child object; its prefab root's own station describes it best.
-            var rootStation = cs.transform.root.GetComponent<CraftingStation>() ?? cs;
+            var rootStation = RecipeSources.RootStation(cs);
             stations[prefab] = new CraftingStationDef { Prefab = prefab, Name = Localize(rootStation.m_name), Upgrader = ReadBool(rootStation, "m_upgrader"), Icon = null };
             return prefab;
         }

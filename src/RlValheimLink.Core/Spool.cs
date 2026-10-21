@@ -205,6 +205,26 @@ namespace RlValheimLink.Core
             Save();
         }
 
+        // ---------- piece-icon atlas map (recipes icons rendered by an admin client) ----------
+
+        private string PieceIconsPath => Path.Combine(_root, "piece-icons.json");
+
+        /// <summary>Keeps the last piece-icon map (<see cref="PieceIconMap.ToJson"/>), replacing the previous one atomically.</summary>
+        public void SavePieceIcons(PieceIconMap map)
+        {
+            string tmp = PieceIconsPath + ".tmp";
+            File.WriteAllText(tmp, map.ToJson());
+            if (File.Exists(PieceIconsPath)) File.Delete(PieceIconsPath);
+            File.Move(tmp, PieceIconsPath);
+        }
+
+        /// <summary>The stored piece-icon map, or null when there is none or it no longer parses.</summary>
+        public PieceIconMap LoadPieceIcons()
+        {
+            try { return File.Exists(PieceIconsPath) && PieceIconMap.TryParse(File.ReadAllText(PieceIconsPath), out var m, out _) ? m : null; }
+            catch (IOException) { return null; }
+        }
+
         /// <summary>
         /// When the Raid Ledger target changes (instance rebuilt, server id or token changed) nothing
         /// uploaded so far exists there any more: forget the uploaded markers so blobs and the items

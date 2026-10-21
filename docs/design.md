@@ -60,8 +60,12 @@ The two server-built kinds are documented in [`design-chests.md`](design-chests.
 built, cadence, batching, rate limits) and §1–§2 (game reads). They never pass through a client or the
 RPC: the server builds the message, `Core/ContainersBuilder` or `Core/RecipesBuilder` normalises it,
 `Enricher.Seal` sets `serverId` and validates it, and the spool and uploader send it like any other.
-Because the recipes export runs on the server, it has no sprites: `atlas` is null and every piece and
-station icon is null (the contract allows that; the items catalogue still carries item icons).
+Because the recipes export runs on the server, it has no sprites of its own. From 0.4.0 an admin
+client renders the piece and station icons on request (`needPieceIcons`, §3) and sends the atlas PNG
+plus a prefab → rect map. The server keeps the map (`spool/piece-icons.json`) and applies it to every
+recipes export of that game version (`Core/PieceIconMap`). Until a 0.4.0 admin client has done that,
+`atlas` is null and every piece and station icon is null; the contract allows both. Prefab ids come
+from one helper, `RecipeSources`, on both sides, so a client's rect lands on the id the server sends.
 
 Game reads (all on the main thread, inside the postfix, no coroutines):
 
@@ -112,13 +116,13 @@ dependency (§9 Q1):
 ZRoutedRpc "RLVL_Chunk"(long sender, ZPackage pkg)
   pkg: int   protocol      = 1
        int   transferId    (client-local counter)
-       byte  kind          0 hello, 1 character, 2 map, 3 items, 4 blob
+       byte  kind          0 hello, 1 character, 2 map, 3 items, 4 blob, 5 pieceIcons (0.4.0)
        int   totalChunks
        int   chunkIndex
        int   totalBytes    (of the whole payload, for pre-allocation and caps)
        byte[] bytes        (≤ 32 KiB)
 ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
-  pkg: int protocol = 1; string op ("needItems" | "ack" | "reject"); string arg
+  pkg: int protocol = 1; string op ("needItems" | "needPieceIcons" | "ack" | "reject"); string arg
 ```
 
 - Payload of kinds 1–3 is the **gzip of the UTF-8 message JSON**. The server
@@ -141,6 +145,20 @@ ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
   `hello: ` declines the whole session (the loaded world is not in
   `Server.WorldAllowlist`, §8): the client stops capturing until it
   reconnects; a `reject` without that prefix concerns one transfer.
+- **Piece icons (0.4.0).** A 0.4.0 hello adds `features: ["pieceIcons"]`; older servers ignore it. The
+  server sends `needPieceIcons` (arg `game=<version>`) to one such client when all of these hold:
+  - it has no stored map for (game version, the server's own mod-set hash), or that map's atlas blob is
+    gone;
+  - the client runs the server's game version and `Server.ItemsExportBy` allows it;
+  - no other client holds the 10-minute lease.
+
+  The client sends the atlas as kind 4 (blob), then kind 5: the gzip of
+  `{ gameVersion, atlas: <binary ref>, icons: { <prefab>: [x, y, w, h] } }`. That is internal RPC JSON,
+  not the Raid Ledger contract, capped at 1 MiB. The server inflates it under that cap and checks it
+  (`PieceIconMap.TryParse`): the header must be valid, and an icon with a bad id, or a rect outside the
+  atlas or not 1–512 px, is dropped. It also requires the atlas blob to be in the spool already. It then
+  stores the map, acks, and forces one recipes re-export with the icons. Older servers drop kind 5
+  (no cap), and the logout flush drops it like other big transfers.
 
 ## 4. Server enrichment and trust
 
@@ -265,7 +283,7 @@ client a few hundred KB of upload once per changed save.
 | `Upload.Gzip` | true | server | `Content-Encoding: gzip` on message bodies |
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
-| `Server.ItemsExportBy` | `admins` | server | who may answer `needItems`: `admins` (adminlist.txt) / `anyone` / `nobody` |
+| `Server.ItemsExportBy` | `admins` | server | who may answer `needItems` and (0.4.0) `needPieceIcons`: `admins` (adminlist.txt) / `anyone` / `nobody` |
 | `Server.WorldAllowlist` | `` | server | comma-separated world names (case-insensitive, trimmed) this server links; empty = every world. A world not listed leaves the link **idle**: no base map, every `hello` is answered `reject hello: world … is not linked`, nothing is spooled or uploaded. For one server that is sometimes booted into a test world: the character key carries no world, so a test-world session would otherwise become the character's "latest" |
 | `BaseMap.Enabled` | true | server | render the world PNG once per (world, version) |
 | `BaseMap.RowsPerTick` | 8 | server | time-slicing of the render (2048 rows ≈ 5 s of ticks at 50 Hz) |
@@ -334,9 +352,9 @@ client a few hundred KB of upload once per changed save.
 v1 defines them; nothing was changed. Two notes for the Raid Ledger side, neither a
 format change: CONTRACT §5b's prose says `recipes` is "sent by an admin client"
 while 0.3.0 builds it on the dedicated server (same wire format, same snapshot key);
-and the server's export has no piece or station icons (`atlas: null`, all icons
-null), which v1 allows. Piece icons would need an admin-client export of the
-piece atlas (a mod follow-up, no contract change). Scouting design and the story
+and piece and station icons come from an admin client since 0.4.0 (an atlas
+ref plus atlas rects, both part of v1); until one has sent the atlas the
+export carries none, which v1 allows. Scouting design and the story
 drafts: [`design-chests.md`](design-chests.md) §4–§5.
 
 For what is shipped: everything the mod reads fits v1. **Received (additive, 2026-10-18,

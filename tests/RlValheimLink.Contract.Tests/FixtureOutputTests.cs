@@ -20,6 +20,7 @@ public class FixtureOutputTests
         yield return new object[] { "items-file-icons.json", (Func<LinkMessage>)(() => SyntheticCaptures.ItemsFileIcons(AtlasBytes())) };
         yield return new object[] { "containers-scan.json", (Func<LinkMessage>)(() => ServerScans.ContainersScan()) };
         yield return new object[] { "recipes-server.json", (Func<LinkMessage>)(() => ServerScans.RecipesServer()) };
+        yield return new object[] { "recipes-server-icons.json", (Func<LinkMessage>)(() => ServerScans.RecipesServerIcons(IconAtlasBytes())) };
     }
 
     static bool Writing => Environment.GetEnvironmentVariable("RLVL_WRITE_FIXTURES") == "1";
@@ -32,6 +33,18 @@ public class FixtureOutputTests
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, SyntheticCaptures.AtlasPng());
+        }
+        return File.ReadAllBytes(path);
+    }
+
+    /// <summary>The committed piece-icon atlas (fixtures/recipes-icons-atlas.png), regenerated only in write mode like items-atlas.png.</summary>
+    public static byte[] IconAtlasBytes()
+    {
+        var path = Repo.Fixture("recipes-icons-atlas.png");
+        if (Writing || !File.Exists(path))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, ServerScans.IconAtlasPng());
         }
         return File.ReadAllBytes(path);
     }
