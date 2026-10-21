@@ -81,6 +81,32 @@ public class UploaderMockTests : IDisposable
     }
 
     [Fact]
+    public async Task Server_built_containers_and_recipes_are_accepted_by_the_mock()
+    {
+        // The two kinds the dedicated server builds itself (no peer): Seal → Spool → Uploader → mock (Zod refinements of 0.2.3).
+        await StartMock(new() { ["RLVL_MOCK_TOKEN"] = "t", ["RLVL_MOCK_SERVER_ID"] = "12" });
+        var log = new TestLog();
+        var spool = new Spool(_dir);
+        var client = new RaidLedgerClient(new ClientSettings { BaseUrl = $"http://localhost:{_port}" }, () => "t");
+        var up = new Uploader(spool, client, new UploaderSettings { MinInterval = TimeSpan.Zero }, log);
+        var now = DateTime.UtcNow;
+        var containers = ContainersBuilder.Build(new ContainersHeader { GameVersion = "1.0.20", ModVersion = "0.3.0", WorldUid = ServerScans.WorldUid, CapturedAtUtc = now }, ServerScans.Containers(), out _);
+        var recipes = ServerScans.RecipesServer();
+        recipes.CapturedAt = MessageJson.Timestamp(now);
+        foreach (LinkMessage m in new LinkMessage[] { containers, recipes })
+        {
+            var r = Enricher.Seal(m, "12");
+            Assert.True(r.Ok, r.Reason);
+            Assert.Equal(PutOutcome.Accepted, spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, now));
+        }
+        await Drive(up, () => spool.PendingCount == 0);
+        Assert.True(spool.PendingCount == 0, log.ToString());
+        Assert.Equal(0, up.Failed);
+        Assert.True(log.Any("POST containers containers|" + ServerScans.WorldUid + " → 202 accepted"), log.ToString());
+        Assert.True(log.Any("POST recipes recipes|1.0.20 → 202 accepted"), log.ToString());
+    }
+
+    [Fact]
     public async Task A_blob_with_no_referencing_message_is_uploaded_on_its_own()
     {
         // The base map is rendered at world load, long before any map message references it (found on the first real server run).
