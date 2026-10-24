@@ -60,9 +60,9 @@ namespace RlValheimLink.Contract
             if (obj == null) { issues.Add(new ValidationIssue("", "invalid_type", "message must be an object")); return issues; }
 
             string kind = (obj["kind"] as JValue)?.Type == JTokenType.String ? (string)obj["kind"] : null;
-            if (kind != "character" && kind != "map" && kind != "items" && kind != "containers" && kind != "recipes")
+            if (kind != "character" && kind != "map" && kind != "items" && kind != "containers" && kind != "recipes" && kind != "portals")
             {
-                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map, items, containers or recipes"));
+                issues.Add(new ValidationIssue("kind", "invalid_union", "kind must be character, map, items, containers, recipes or portals"));
                 return issues;
             }
 
@@ -73,6 +73,7 @@ namespace RlValheimLink.Contract
                 case "items": Items(obj, issues); break;
                 case "containers": Containers(obj, issues); break;
                 case "recipes": Recipes(obj, issues); break;
+                case "portals": Portals(obj, issues); break;
             }
             return issues;
         }
@@ -432,6 +433,36 @@ namespace RlValheimLink.Contract
 
             Int(o, "omittedShared", "", issues, 0, 1_000_000, out _);
             Int(o, "omittedPrivate", "", issues, 0, 1_000_000, out _);
+        }
+
+        /// <summary>CONTRACT.md §5c (Zod: valheim-link-portals.schema.ts): a full snapshot of the world's portals.</summary>
+        private static void Portals(JObject o, List<ValidationIssue> issues)
+        {
+            Keys(o, "", issues, HeaderKeys, "worldUid", "portals", "omitted");
+            Header(o, issues);
+            Int64Str(o, "worldUid", "", issues);
+            if (Arr(o, "portals", "", issues, 0, Caps.PortalsMax, out JArray portals))
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                for (int i = 0; i < portals.Count; i++)
+                {
+                    string p = "portals." + i;
+                    if (!ObjAt(portals[i], p, issues, out JObject pt)) continue;
+                    Keys(pt, p, issues, "prefab", "x", "y", "z", "tag");
+                    bool prefabOk = Str(pt, "prefab", p, issues, 0, null, Prefab, out string prefab);
+                    bool xOk = Num(pt, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double x);
+                    bool zOk = Num(pt, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double z);
+                    string yKey = null;
+                    var yt = pt["y"];
+                    if (yt == null) issues.Add(new ValidationIssue(p + ".y", "invalid_type", "required (nullable)"));
+                    else if (yt.Type == JTokenType.Null) yKey = "null";
+                    else if (Num(pt, "y", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax, out double y)) yKey = Coord(y);
+                    Str(pt, "tag", p, issues, 0, Caps.PortalTagMaxChars, null);
+                    if (prefabOk && xOk && zOk && yKey != null && !seen.Add(prefab + "|" + Coord(x) + "|" + yKey + "|" + Coord(z)))
+                        issues.Add(new ValidationIssue(p, "custom", "duplicate portal (prefab, position)"));
+                }
+            }
+            Int(o, "omitted", "", issues, 0, 1_000_000, out _);
         }
 
         private static readonly string[] ProcessorTypes = { "smelter", "fermenter", "cooking", "incinerator" };

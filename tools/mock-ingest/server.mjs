@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mock Raid Ledger ingest, shaped like the real ROK-1833 endpoint (merged 2026-10-18, PR #1671)
 // and contract/v1/CONTRACT.md §1, §6, §7:
-//   POST <MESSAGES_PATH>/<kind>      kind = character | map | items | containers | recipes; one JSON message; Bearer token per
+//   POST <MESSAGES_PATH>/<kind>      kind = character | map | items | containers | recipes | portals; one JSON message; Bearer token per
 //                                    server; serverId must match the token's; optional Content-Encoding: gzip
 //                                    (the §7 cap applies to the DECODED body); body kind must match the route
 //   PUT  <BLOBS_PATH>/<sha256>       raw PNG, Content-Type: image/png, identity encoding only;
@@ -28,7 +28,7 @@ addFormats(ajv);
 const validate = ajv.compile(schema);
 
 // §7 constants (mirrors packages/contract/src/valheim-link-common.schema.ts)
-export const CAPS = { character: 2_097_152, map: 8_388_608, items: 12_582_912, containers: 10_485_760, recipes: 12_582_912, binary: 16_777_216, bitmapEdgeMax: 4096 };
+export const CAPS = { character: 2_097_152, map: 8_388_608, items: 12_582_912, containers: 10_485_760, recipes: 12_582_912, portals: 4_194_304, binary: 16_777_216, bitmapEdgeMax: 4096 };
 export const CAPTURED_AT_MAX_FUTURE_MS = 300_000;
 const bitmapBytes = (w, h) => Math.ceil((w * h) / 8);
 export const CONTAINER_ENTRIES_MAX = 50_000, RECIPE_ENTRIES_MAX = 12_000;
@@ -155,7 +155,14 @@ export function refineRecipes(msg) {
   return issues;
 }
 
-const REFINE = { character: refineCharacter, map: refineMap, items: refineItems, containers: refineContainers, recipes: refineRecipes };
+/** valheim-link-portals.schema.ts: (prefab, x, y, z) unique; y may be null. */
+export function refinePortals(msg) {
+  const issues = [];
+  unique(msg.portals, (p) => `${p.prefab}|${p.x}|${p.y}|${p.z}`, (i) => `portals.${i}`, issues);
+  return issues;
+}
+
+const REFINE = { character: refineCharacter, map: refineMap, items: refineItems, containers: refineContainers, recipes: refineRecipes, portals: refinePortals };
 export const refine = (msg) => REFINE[msg.kind]?.(msg) ?? [];
 
 export function createMock(opts = {}) {
@@ -270,7 +277,7 @@ export function createMock(opts = {}) {
     }
     const key = msg.kind === 'character' ? ['character', serverId, msg.character.steamId, msg.character.playerId]
       : msg.kind === 'map' ? ['map', serverId, msg.character.steamId, msg.character.playerId, msg.character.worldUid]
-      : msg.kind === 'containers' ? ['containers', serverId, msg.worldUid]
+      : msg.kind === 'containers' || msg.kind === 'portals' ? [msg.kind, serverId, msg.worldUid]
       : [msg.kind, serverId, msg.gameVersion]; // items, recipes
     const k = key.join('|');
     const prev = state.snapshots.get(k);
@@ -337,5 +344,5 @@ export function createMock(opts = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 8787);
   const { server, messagesPath, blobsPath } = createMock();
-  server.listen(port, () => console.log(`mock-ingest listening on http://localhost:${port}  POST ${messagesPath}/{character|map|items|containers|recipes}  PUT ${blobsPath}/<sha256>  (token: $RLVL_MOCK_TOKEN, serverId: $RLVL_MOCK_SERVER_ID)`));
+  server.listen(port, () => console.log(`mock-ingest listening on http://localhost:${port}  POST ${messagesPath}/{character|map|items|containers|recipes|portals}  PUT ${blobsPath}/<sha256>  (token: $RLVL_MOCK_TOKEN, serverId: $RLVL_MOCK_SERVER_ID)`));
 }

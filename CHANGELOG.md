@@ -16,6 +16,10 @@
   unchanged and apply after mapping. Trophies were already prefab ids (`AddTrophy` stores the drop prefab
   name).
 - No wire-format change.
+- Contract re-pinned to Raid Ledger `9b04a68` (additive, still v1): the new **`portals`** kind (ROK-1944,
+  a server-side scan of every portal). The pre-send validator and the mock receiver now know its rules
+  (unique (prefab, x, y, z), tag ≤ 64 chars, nullable height, ≤ 4 096 portals, 4 MiB body). The mod
+  does not send it yet; the portal scan is a later release.
 
 ## 0.4.1 — 2026-10-21
 
