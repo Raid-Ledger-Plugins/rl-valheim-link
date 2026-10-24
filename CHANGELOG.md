@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.2 — 2026-10-24
+
+**Client fix** (players get it through the modpack; the server needs nothing new).
+
+- `character.knownRecipes` and `character.knownItems` now carry **prefab ids**, as the contract defines
+  (CONTRACT.md §3), instead of the game's name tokens. Valheim stores what a player has discovered as
+  tokens: `Player.AddKnownRecipe` stores the result item's `m_shared.m_name` (`$item_sword_bronze`),
+  `AddKnownPiece` stores `Piece.m_name` (`$piece_workbench`), and `AddKnownItem` stores `m_shared.m_name`.
+  The mod only sanitised them, so Raid Ledger received `_item_sword_bronze` and its Planner's "not yet
+  discovered" filter (ROK-1862) matched nothing. The client now maps every token through a lookup built
+  from the live ObjectDB (recipes → result prefab, build pieces of every tool → piece prefab, items →
+  item prefab; modded content included). A token that names several prefabs sends all of them; a token
+  with no match is dropped with one WARN (count and up to 5 examples). Sort, dedupe and the 8 192 cap are
+  unchanged and apply after mapping. Trophies were already prefab ids (`AddTrophy` stores the drop prefab
+  name).
+- No wire-format change.
+
 ## 0.4.1 — 2026-10-21
 
 **Server-only fix** (Raid Ledger ROK-1894). Clients and the modpack need nothing.
