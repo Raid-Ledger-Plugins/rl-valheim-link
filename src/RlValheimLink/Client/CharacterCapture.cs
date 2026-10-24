@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using RlValheimLink.Contract;
+using RlValheimLink.Core;
 using ContractInventory = RlValheimLink.Contract.Inventory;
 
 namespace RlValheimLink.Client
@@ -30,8 +31,10 @@ namespace RlValheimLink.Client
             Inventory(p, m.Inventory);
             Skills(p, m.Skills);
             m.Trophies = PrefabList(GameAccess.Trophies(p), Caps.TrophiesMax, "trophies");
-            m.KnownItems = PrefabList(GameAccess.KnownMaterial(p), Caps.KnownMax, "knownItems");
-            m.KnownRecipes = PrefabList(GameAccess.KnownRecipes(p), Caps.KnownMax, "knownRecipes");
+            // The known sets hold name tokens ("$item_sword_bronze", "$piece_workbench"); the contract wants prefab ids.
+            var known = KnownNameLookup.Current();
+            m.KnownItems = Known(GameAccess.KnownMaterial(p), known.Items, "knownItems");
+            m.KnownRecipes = Known(GameAccess.KnownRecipes(p), known.Recipes, "knownRecipes");
             return m;
         }
 
@@ -137,6 +140,15 @@ namespace RlValheimLink.Client
             }
             list.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
             if (list.Count > Caps.SkillsMax) { Log.Warn($"skills: {list.Count - Caps.SkillsMax} dropped over the cap"); list.RemoveRange(Caps.SkillsMax, list.Count - Caps.SkillsMax); }
+        }
+
+        /// <summary>Known tokens → prefab ids (sorted, unique, capped); unmatched tokens are dropped with one WARN.</summary>
+        private static List<string> Known(IEnumerable<string> src, IReadOnlyDictionary<string, List<string>> lookup, string what)
+        {
+            var r = KnownNameMapper.Map(src, lookup, Caps.KnownMax);
+            if (r.Unmatched > 0) Log.Warn($"{what}: {r.Unmatched} entr{(r.Unmatched == 1 ? "y" : "ies")} with no prefab dropped, e.g. {string.Join(", ", r.UnmatchedExamples.ToArray())}");
+            if (r.OverCap > 0) Log.Warn($"{what}: {r.OverCap} dropped over the cap of {Caps.KnownMax}");
+            return r.Prefabs;
         }
 
         private static List<string> PrefabList(IEnumerable<string> src, int cap, string what)

@@ -86,7 +86,11 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   is loaded (see the EquipmentAndQuickSlots bullet below).
 - Skills: `Skills.m_skillData` → `id = SkillType.ToString()`, `m_level`,
   `m_accumulator`.
-- Trophies / known: `Player.m_trophies`, `m_knownMaterial`, `m_knownRecipes`
+- Trophies / known: `Player.m_trophies`, `m_knownMaterial`, `m_knownRecipes`. Trophies hold drop-prefab
+  names. The two known sets hold the game's **name tokens** (0.221.4 IL: `AddKnownRecipe` → result item
+  `m_shared.m_name`, `AddKnownPiece` → `Piece.m_name`, `AddKnownItem` → `m_shared.m_name`); since 0.4.2
+  the capture maps them to prefab ids through a lookup built from the live ObjectDB
+  (`Client/KnownNameLookup`, `Core/KnownNameMapper`) and drops tokens with no match
   (HashSets, sorted ordinal before emit so output is stable).
 - Inventory rows past the vanilla four are named through EquipmentAndQuickSlots 3.x's official
   `API.IsSlotCell(x, y, out slotId)` (a slot id containing "quick" is a quick slot, any other EAQS
