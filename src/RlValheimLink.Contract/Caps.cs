@@ -13,6 +13,7 @@ namespace RlValheimLink.Contract
         public const int ItemsMaxBytes = 12_582_912;
         public const int ContainersMaxBytes = 10_485_760;
         public const int RecipesMaxBytes = 12_582_912;
+        public const int PortalsMaxBytes = 4_194_304;
         public const int BinaryMaxBytes = 16_777_216;
 
         public const int BitmapDataMaxChars = 3_000_000;
@@ -43,6 +44,8 @@ namespace RlValheimLink.Contract
         public const int ProcessInputsMax = 8;
         public const int RecipeEntriesMax = 12_000;
         public const int StationLevelMax = 20;
+        public const int PortalsMax = 4096;
+        public const int PortalTagMaxChars = 64;
 
         public const int TimestampMaxChars = 24;
         public const int WorldCoordMax = 32_768;
@@ -82,6 +85,7 @@ namespace RlValheimLink.Contract
                 case "items": return ItemsMaxBytes;
                 case "containers": return ContainersMaxBytes;
                 case "recipes": return RecipesMaxBytes;
+                case "portals": return PortalsMaxBytes;
                 default: return 0;
             }
         }
