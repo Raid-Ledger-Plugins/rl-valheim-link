@@ -10,11 +10,24 @@ namespace RlValheimLink.Core
     {
         public const int LabelMax = 64;
 
-        // TextMeshPro / Unity rich-text tags: <b>, </color>, <color=#f00>, <size=120%>, <sprite=3>,
-        // <sprite name="x">, and the <#rrggbb> colour shorthand. A tag must start with a letter (or '/' + letter),
-        // so player text such as "<3", "<-- go" or "a < b" survives.
-        private static readonly Regex Tag = new Regex(@"</?[A-Za-z][^<>]{0,127}>|<#[0-9A-Fa-f]{3,8}>", RegexOptions.CultureInvariant);
-        private static readonly Regex Control = new Regex(@"[\u0000-\u001F\u007F]+", RegexOptions.CultureInvariant);
+        // TextMeshPro rich-text tags, matched by an allow-list of TMP tag names (case-insensitive), opening or
+        // closing: <b>, </color>, <color=#f00>, <size=120%>, <sprite=3>, <sprite name="x">. The name must be
+        // followed by '=', whitespace or '>', so player text such as "<Home>", "<b-side>", "<3" or "a < b"
+        // survives (TMP renders unknown tags literally, so that is what the player sees in game).
+        private const string TagNames =
+            "b|i|u|s|color|size|sprite|mark|sub|sup|font|alpha|material|link|voffset|cspace|mspace|pos|indent|" +
+            "line-height|line-indent|margin|align|rotate|noparse|nobr|lowercase|uppercase|smallcaps|style|gradient|width";
+
+        // The <#rgb>, <#rgba>, <#rrggbb>, <#rrggbbaa> colour shorthand is a real TMP colour tag, so it goes too;
+        // any other length ("<#12345>", "<#123x>") is plain text and stays.
+        private static readonly Regex Tag = new Regex(
+            @"</?(?:" + TagNames + @")(?=[\s=>])[^<>]{0,127}>|<#(?:[0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})>",
+            RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+        // C0 + DEL + C1 controls, the line/paragraph separators and the bidi embedding/override/isolate controls
+        // (which can visually reorder a label) all become spaces.
+        private static readonly Regex Control = new Regex(
+            @"[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]+", RegexOptions.CultureInvariant);
         private static readonly Regex Integer = new Regex(@"^-?[0-9]+\z", RegexOptions.CultureInvariant);
 
         /// <summary>

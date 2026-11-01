@@ -109,9 +109,11 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   `OnMapLeftClick` on a shared pin sets `m_ownerID = 0` (adopts it); `UpdatePins`
   hides `m_ownerID != 0` pins when the shared layer is toggled off. There is no
   `m_shared` field. `label` = `Localization.instance.Localize(m_name)` (names
-  can be `$…` tokens), then Core `MapPins.Label`: rich-text tags stripped,
-  control characters to spaces, trimmed, clipped to 64 UTF-16 units, "" when
-  nothing is left. `m_author` (platform user id) is not sent: the contract has
+  can be `$…` tokens), then Core `MapPins.Label`: TextMeshPro tags stripped
+  (allow-list of TMP tag names, any case, plus `<#rgb>`/`<#rgba>`/`<#rrggbb>`/
+  `<#rrggbbaa>`; other bracketed text such as `<Home>` stays, as TMP shows it),
+  control characters (C0, DEL, C1, U+2028/2029, bidi controls) to spaces,
+  trimmed, clipped to 64 UTF-16 units, "" when nothing is left. `m_author` (platform user id) is not sent: the contract has
   no field for it. Pin types outside the vanilla enum `ToString()` to a bare
   integer and are sent as that integer (open type set; generic icon), logged
   once per value.
@@ -390,7 +392,6 @@ future per-file mode can without a contract change. Things noted for the Raid Le
 `Ping`, `EventArea`, `Hildir1-3` and `None`; only saved pins are sent.
 `ItemType` now has `Trinket`, `TwoHandedWeaponLeft`, `AmmoNonEquipable`,
 `Attach_Atgeir`, `Fish` — all open-set in the contract, so fine.
-
 
 **Not requested (ROK-1881 notes):** a readable name for modded pin types (a mod
 that casts a new value onto `Minimap.PinType` has no name to send; it would need

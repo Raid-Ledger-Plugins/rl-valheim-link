@@ -27,6 +27,40 @@ public class MapPinsTests
     public void Label_KeepsPlayerTextThatOnlyLooksLikeATag(string localized, string expected) =>
         Assert.Equal(expected, MapPins.Label(localized));
 
+    [Theory]
+    [InlineData("<Home>", "<Home>")]
+    [InlineData("<North base>", "<North base>")]
+    [InlineData("Go <here> now", "Go <here> now")]
+    [InlineData("<b-side> cave", "<b-side> cave")]
+    [InlineData("<Boss> altar", "<Boss> altar")]
+    [InlineData("<#12345> chest", "<#12345> chest")]
+    [InlineData("<#123x> chest", "<#123x> chest")]
+    public void Label_KeepsBracketedPlayerTextThatIsNotATmpTag(string localized, string expected) =>
+        Assert.Equal(expected, MapPins.Label(localized));
+
+    [Theory]
+    [InlineData("<color=red>Boss</color>", "Boss")]
+    [InlineData("<COLOR=red>Boss</Color>", "Boss")]
+    [InlineData("<#ff0000>x", "x")]
+    [InlineData("<#f00>x", "x")]
+    [InlineData("<#f00a>x", "x")]
+    [InlineData("<#ff0000aa>x", "x")]
+    [InlineData("<line-height=50%>Tall</line-height>", "Tall")]
+    [InlineData("<u><s>Old</s></u> camp", "Old camp")]
+    public void Label_StripsAllowListedTmpTagsAndHexColours(string localized, string expected) =>
+        Assert.Equal(expected, MapPins.Label(localized));
+
+    [Theory]
+    [InlineData("Iron\u202Ehere", "Iron here")]
+    [InlineData("Iron\u202Ahere", "Iron here")]
+    [InlineData("Iron\u2066\u2069here", "Iron here")]
+    [InlineData("Iron\u0085here", "Iron here")]
+    [InlineData("Iron\u009Fhere", "Iron here")]
+    [InlineData("Iron\u2028here", "Iron here")]
+    [InlineData("Iron\u2029here", "Iron here")]
+    public void Label_FlattensBidiC1AndSeparatorControls(string localized, string expected) =>
+        Assert.Equal(expected, MapPins.Label(localized));
+
     [Fact]
     public void Label_KeepsEmoji() => Assert.Equal("Base \U0001F3E0", MapPins.Label("<b>Base \U0001F3E0</b>"));
 

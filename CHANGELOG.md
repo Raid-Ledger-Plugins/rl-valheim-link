@@ -7,8 +7,9 @@ dedicated server needs nothing new.
 
 - Map pin labels on Raid Ledger's Map tab now read as they do in game. Names the game stores as translation
   tokens (location, boss and enemy pins, `$hud_…`) are translated with the player's language before
-  sending, rich-text tags (`<color=…>`, `<b>`, `<size=…>`, `<sprite…>`) are removed, line breaks become
-  spaces and surrounding whitespace is trimmed; a label with nothing left is sent empty. The 64-character
+  sending, rich-text tags (`<color=…>`, `<b>`, `<size=…>`, `<sprite…>`, `<#ff0000>`) are removed while
+  other text in angle brackets (`<Home>`) is kept as the game shows it, line breaks and other control
+  characters become spaces and surrounding whitespace is trimmed; a label with nothing left is sent empty. The 64-character
   cap is applied after that, never in the middle of an emoji.
 - Which pins count as shared (from a cartography table) is unchanged and now confirmed against the game
   code: a pin is shared when another player wrote it to the table and you have not taken it as your own.
