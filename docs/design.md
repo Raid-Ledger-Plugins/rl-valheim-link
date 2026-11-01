@@ -304,6 +304,8 @@ client a few hundred KB of upload once per changed save.
 | `Chests.StacksPerTick` | 200 | server | decoded stacks per server tick while a scan runs |
 | `Chests.IncludeVehicles` | true | server | also scan carts and ships (flagged `vehicle`) |
 | `Chests.ExcludePrefabs` / `ExtraPrefabs` | `incinerator` / `` | server | container prefabs never scanned / scanned although no build tool lists them |
+| `Portals.Enabled` | true | server | the portal scan (`portals`, 0.4.4, ROK-1945), dedicated servers only, on the chest scan's grid (`Chests.IntervalMinutes`) whether or not `Chests.Enabled` is on; its own switch because portals are map data, not inventory |
+| `Portals.ExtraPrefabs` | `` | server | portal prefabs scanned although they have no `TeleportWorld` component |
 | `Recipes.Enabled` | true | server | the `recipes` export (0.3.0), dedicated servers only; exists only to switch it off |
 | `Chests.DiagnosticDump` | false | server | the 0.2.1 spike's **diagnostic** (`docs/design-chests.md` §7), dedicated servers only: 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist`. Off since 0.3.0 (the scan ships); replaces `Dump` (ignored) |
 | `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
