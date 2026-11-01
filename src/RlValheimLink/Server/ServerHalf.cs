@@ -54,6 +54,7 @@ namespace RlValheimLink.Server
         private static PortalScanner _portals;
         private static int _portalScans;
         private static string _portalStatus = "off";
+        private static bool _portalNoPrefabsWarned;
 
         // Recipes export (docs/design-chests.md §2): ~90 s after start, once per (game version, server mod set).
         private static RecipesExport _recipes;
@@ -81,7 +82,7 @@ namespace RlValheimLink.Server
             _worldIdle = !WorldAllowlist.Allows(PluginConfig.WorldAllowlist.Value, _worldName);
             _dedicated = ZNet.instance != null && ZNet.instance.IsDedicated();
             _chestSchedule = null; _chests = null; _chestScans = 0; _unreadableStreak = 0; _chestStatus = "off";
-            _portalSchedule = null; _portals = null; _portalScans = 0; _portalStatus = "off";
+            _portalSchedule = null; _portals = null; _portalScans = 0; _portalStatus = "off"; _portalNoPrefabsWarned = false;
             _recipes = null; _recipesAt = DateTime.MaxValue; _serverModSet = null; _recipesStatus = "off"; _waitingLogged = false;
             _recipesForce = false; _pieceIcons = null; _iconsLeasePeer = null; _iconsLeaseUntil = DateTime.MinValue;
             if (_worldIdle)
@@ -200,9 +201,10 @@ namespace RlValheimLink.Server
             else Log.Info("chest scan off (Chests.Enabled = false)");
             if (PluginConfig.PortalsEnabled.Value)
             {
-                _portalSchedule = new ScanSchedule(now, ChestFirstDelay, TimeSpan.FromMinutes(PluginConfig.ChestsIntervalMinutes.Value));
+                var portalFirst = PortalDiscovery.FirstDelay(ChestFirstDelay);
+                _portalSchedule = new ScanSchedule(now, portalFirst, TimeSpan.FromMinutes(PluginConfig.ChestsIntervalMinutes.Value));
                 _portalStatus = "scheduled";
-                Log.Info($"portal scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min (Chests.IntervalMinutes), the first in {ChestFirstDelay.TotalSeconds:0} s; extra prefabs: {Csv(PluginConfig.PortalsExtraPrefabs.Value)}");
+                Log.Info($"portal scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min (Chests.IntervalMinutes), the first in {portalFirst.TotalSeconds:0} s; extra prefabs: {Csv(PluginConfig.PortalsExtraPrefabs.Value)}");
             }
             else Log.Info("portal scan off (Portals.Enabled = false)");
             if (PluginConfig.RecipesEnabled.Value)
@@ -289,6 +291,7 @@ namespace RlValheimLink.Server
                 try { result = _portals.Tick(); }
                 catch (Exception e) { Log.Error("portal scan aborted; the next scan starts on schedule", e); _portalStatus = "aborted"; }
                 if (result != null) FinishPortalScan(result);
+                else if (_portals.Stopped) { _portalStatus = "stopped"; Log.Info("portal scan stopped: the world unloaded mid-scan; nothing sent"); }
             }
             if (!_portalSchedule.TryStart(now, _portals != null && _portals.Running, out DateTime slot, out int skipped)) return;
             if (skipped > 0) Log.Info($"portal scan: {skipped} slot(s) skipped (a scan was still running or the server stalled)");
@@ -296,7 +299,15 @@ namespace RlValheimLink.Server
             {
                 _portals = PortalScanner.Create(CsvSet(PluginConfig.PortalsExtraPrefabs.Value));
                 if (_portals == null) { Log.Warn("portal scan: the world is not loaded yet; trying at the next slot"); return; }
-                Log.Info($"portal scan: {_portals.Prefabs.Count} portal prefabs: {(_portals.Prefabs.Count == 0 ? "none" : string.Join(",", _portals.Prefabs))}");
+                if (_portals.UnknownExtras.Count > 0 && !_portalNoPrefabsWarned) Log.Warn($"portal scan: [Portals] ExtraPrefabs not found as prefabs, ignored: {string.Join(",", _portals.UnknownExtras)}");
+                if (!PortalDiscovery.CanSnapshot(_portals.Prefabs.Count))
+                {
+                    // An empty snapshot would clear every portal on Raid Ledger; 0 prefabs means discovery failed.
+                    if (!_portalNoPrefabsWarned) Log.Warn("portal scan: 0 portal prefabs found, so nothing is sent (an empty snapshot would clear every portal on Raid Ledger); trying again at each slot");
+                    _portalNoPrefabsWarned = true; _portals = null; _portalStatus = "no portal prefabs";
+                    return;
+                }
+                Log.Info($"portal scan: {_portals.Prefabs.Count} portal prefabs: {string.Join(",", _portals.Prefabs)}");
             }
             _portals.Begin(slot);
             _portalStatus = "scanning";

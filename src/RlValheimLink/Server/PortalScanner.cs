@@ -10,8 +10,9 @@ namespace RlValheimLink.Server
     /// read its position and pairing tag. Portal prefabs are every network prefab with a
     /// <see cref="TeleportWorld"/> (on the root or a child: vanilla <c>portal_wood</c> / <c>portal_stone</c>
     /// and modded portals cloned from them, e.g. AdvancedPortals), plus <c>Portals.ExtraPrefabs</c>. The tag
-    /// is the vanilla <c>ZDOVars.s_tag</c> string, which XPortal also writes. Rounding, dedupe, tag clipping
-    /// and the cap are <see cref="PortalsBuilder"/>'s. Time-sliced like the chest scan's discovery: one
+    /// is the vanilla <c>ZDOVars.s_tag</c> string. XPortal appears to write its name there too (observed in a
+    /// server log; UNVERIFIED, operator checklist §J). Prefab selection and the 0-prefab rule are
+    /// <see cref="PortalDiscovery"/>'s; rounding, dedupe, tag clipping and the cap are <see cref="PortalsBuilder"/>'s. Time-sliced like the chest scan's discovery: one
     /// GetAllZDOsWithPrefabIterative call per tick. Tags and positions are never logged.
     /// </summary>
     internal sealed class PortalScanner
@@ -31,28 +32,33 @@ namespace RlValheimLink.Server
         private Result _result;
         private bool _finished;
 
-        private PortalScanner(List<string> prefabs) { _prefabs = prefabs; }
+        private PortalScanner(List<string> prefabs, List<string> unknownExtras) { _prefabs = prefabs; UnknownExtras = unknownExtras; }
 
         public IReadOnlyList<string> Prefabs => _prefabs;
+        /// <summary><c>Portals.ExtraPrefabs</c> entries that are not network prefabs (typo, mod not installed).</summary>
+        public IReadOnlyList<string> UnknownExtras { get; }
         public bool Running => _run != null;
+        /// <summary>True after the tick on which a scan ended without finishing (the world unloaded mid-scan).</summary>
+        public bool Stopped { get; private set; }
 
         /// <summary>Portal prefabs to scan; null when the game is not ready yet.</summary>
         public static PortalScanner Create(ICollection<string> extra)
         {
             if (ZNetScene.instance == null || ZDOMan.instance == null) return null;
-            var names = new SortedSet<string>(StringComparer.Ordinal);
+            var net = new List<KeyValuePair<string, bool>>();
             foreach (var go in ZNetScene.instance.m_prefabs)
             {
                 if (go == null) continue;
-                if (extra.Contains(go.name) || go.GetComponentInChildren<TeleportWorld>(true) != null) names.Add(go.name);
+                net.Add(new KeyValuePair<string, bool>(go.name, extra.Contains(go.name) || go.GetComponentInChildren<TeleportWorld>(true) != null));
             }
-            return new PortalScanner(new List<string>(names));
+            var names = PortalDiscovery.Select(net, extra, out var unknownExtras);
+            return new PortalScanner(names, unknownExtras);
         }
 
         public void Begin(DateTime scheduledAt)
         {
             _result = new Result { ScheduledAt = scheduledAt };
-            _finished = false;
+            _finished = false; Stopped = false;
             _run = Run(_result).GetEnumerator();
         }
 
@@ -68,6 +74,7 @@ namespace RlValheimLink.Server
             if (more) return null;
             _run = null;
             var r = _result; _result = null;
+            Stopped = !_finished;
             return _finished ? r : null;
         }
 
