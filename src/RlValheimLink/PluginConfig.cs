@@ -29,6 +29,9 @@ namespace RlValheimLink
         public static ConfigEntry<string> ChestsExcludePrefabs, ChestsExtraPrefabs;
         public static ConfigEntry<int> ChestsDumpRuns, ChestsDumpRerunMinutes;
         public static ConfigEntry<string> ChestsDumpMaterials;
+        // [Portals] — the portal scan (`portals`, CONTRACT.md §5c, ROK-1945)
+        public static ConfigEntry<bool> PortalsEnabled;
+        public static ConfigEntry<string> PortalsExtraPrefabs;
         // [Recipes] — the `recipes` export (docs/design-chests.md §2)
         public static ConfigEntry<bool> RecipesEnabled;
 
@@ -37,7 +40,7 @@ namespace RlValheimLink
             BaseUrl = cfg.Bind("RaidLedger", "BaseUrl", "", "Server only. Your Raid Ledger instance's base URL (scheme + host, no trailing slash). Empty = uploads off.");
             ServerToken = cfg.Bind("RaidLedger", "ServerToken", "", "Server only. Per-server bearer token issued by Raid Ledger admin for THIS game server. Never logged.");
             ServerId = cfg.Bind("RaidLedger", "ServerId", "", "Server only. Raid Ledger's id for this game server, issued with the token; goes into every message.");
-            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items | containers | recipes (ROK-1833). Change only to point at a mock on another path.");
+            MessagesPath = cfg.Bind("RaidLedger", "MessagesPath", "/api/plugins/valheim/link/messages/{kind}", "Server only. POST route for messages; {kind} is replaced by character | map | items | containers | recipes | portals (ROK-1833). Change only to point at a mock on another path.");
             BlobsPath = cfg.Bind("RaidLedger", "BlobsPath", "/api/plugins/valheim/link/blobs/{sha256}", "Server only. PUT route for PNG blobs; {sha256} is replaced (ROK-1833).");
 
             UploadIntervalSeconds = cfg.Bind("Upload", "IntervalSeconds", 5, new ConfigDescription("Server only. Minimum seconds between HTTP requests to Raid Ledger.", new AcceptableValueRange<int>(1, 600)));
@@ -75,6 +78,9 @@ namespace RlValheimLink
             ChestsDumpRuns = cfg.Bind("Chests", "DumpRuns", 2, new ConfigDescription("Dedicated server only. How many dumps to run after each start when DiagnosticDump is on; every dump after the first also reports what changed since the previous one.", new AcceptableValueRange<int>(1, 6)));
             ChestsDumpRerunMinutes = cfg.Bind("Chests", "DumpRerunMinutes", 10, new ConfigDescription("Dedicated server only. Minutes between dumps (from the end of one to the start of the next).", new AcceptableValueRange<int>(1, 120)));
             ChestsDumpMaterials = cfg.Bind("Chests", "DumpMaterials", "Wood,Stone,Resin", "Dedicated server only. Comma-separated item prefab names (up to 5) whose totals over all player-built containers each dump prints, to compare with what you see in the chests.");
+
+            PortalsEnabled = cfg.Bind("Portals", "Enabled", true, "Dedicated server only. Find every portal in the world (position, prefab and pairing tag) and send them to Raid Ledger as a `portals` snapshot, so they appear on the site's map: on the chest scan's grid (2 minutes after start, then every Chests.IntervalMinutes), whether or not Chests.Enabled is on. On by default; set false to switch it off. Needs the [RaidLedger] settings and a world in [Server] WorldAllowlist.");
+            PortalsExtraPrefabs = cfg.Bind("Portals", "ExtraPrefabs", "", "Dedicated server only. Comma-separated portal prefabs to scan although they have no TeleportWorld component (a modded portal built some other way). Vanilla portals and portals cloned from them (e.g. AdvancedPortals) are found without this.");
 
             RecipesEnabled = cfg.Bind("Recipes", "Enabled", true, "Dedicated server only. Send the server's crafting recipes, build pieces, crafting stations and processing steps (smelter, kiln, fermenter, cooking, obliterator…) to Raid Ledger as a `recipes` snapshot, once per game version and server mod set, about 90 s after start. On by default; set false to switch it off.");
         }

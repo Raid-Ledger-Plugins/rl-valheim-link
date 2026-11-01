@@ -49,6 +49,12 @@ namespace RlValheimLink.Server
         private static DateTime _unreadableWarnAt = DateTime.MinValue;
         private static string _chestStatus = "off";
 
+        // Portal scan (`portals`, CONTRACT.md §5c, ROK-1945): its own switch, on the chest scan's grid.
+        private static ScanSchedule _portalSchedule;
+        private static PortalScanner _portals;
+        private static int _portalScans;
+        private static string _portalStatus = "off";
+
         // Recipes export (docs/design-chests.md §2): ~90 s after start, once per (game version, server mod set).
         private static RecipesExport _recipes;
         private static DateTime _recipesAt = DateTime.MaxValue;
@@ -75,6 +81,7 @@ namespace RlValheimLink.Server
             _worldIdle = !WorldAllowlist.Allows(PluginConfig.WorldAllowlist.Value, _worldName);
             _dedicated = ZNet.instance != null && ZNet.instance.IsDedicated();
             _chestSchedule = null; _chests = null; _chestScans = 0; _unreadableStreak = 0; _chestStatus = "off";
+            _portalSchedule = null; _portals = null; _portalScans = 0; _portalStatus = "off";
             _recipes = null; _recipesAt = DateTime.MaxValue; _serverModSet = null; _recipesStatus = "off"; _waitingLogged = false;
             _recipesForce = false; _pieceIcons = null; _iconsLeasePeer = null; _iconsLeaseUntil = DateTime.MinValue;
             if (_worldIdle)
@@ -126,6 +133,7 @@ namespace RlValheimLink.Server
         {
             _active = false; _worldIdle = false;
             _chests?.Cancel(); _chests = null; _chestSchedule = null; _recipes = null;
+            _portals?.Cancel(); _portals = null; _portalSchedule = null;
             LinkChannel.PayloadReceived -= OnPayload;
             _client?.Dispose(); _client = null; _uploader = null; _spool = null; _baseMap = null;
         }
@@ -170,7 +178,7 @@ namespace RlValheimLink.Server
 
         public static string Status() => !_active ? "server half inactive"
             : _worldIdle ? $"link idle: world '{_worldName}' not in Server.WorldAllowlist"
-            : $"uploader={_uploader?.State} {_spool?.Summary()} uploaded={_uploader?.Uploaded} failed={_uploader?.Failed} baseMap={(_baseMap == null ? "off" : _baseMap.Done ? "ready" : _baseMap.Busy ? "rendering" : "pending")} chests={_chestStatus} recipes={_recipesStatus}";
+            : $"uploader={_uploader?.State} {_spool?.Summary()} uploaded={_uploader?.Uploaded} failed={_uploader?.Failed} baseMap={(_baseMap == null ? "off" : _baseMap.Done ? "ready" : _baseMap.Busy ? "rendering" : "pending")} chests={_chestStatus} portals={_portalStatus} recipes={_recipesStatus}";
 
         // ---------- kinds the server builds itself: containers, recipes ----------
 
@@ -179,7 +187,7 @@ namespace RlValheimLink.Server
             if (!_dedicated)
             {
                 // A player's single-player or self-hosted world (IsServer too) gets no scan hitches.
-                Log.Info("chest scan and recipes export: dedicated servers only; off on this self-hosted world");
+                Log.Info("chest scan, portal scan and recipes export: dedicated servers only; off on this self-hosted world");
                 return;
             }
             var now = DateTime.UtcNow;
@@ -190,6 +198,13 @@ namespace RlValheimLink.Server
                 Log.Info($"chest scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min, the first in {ChestFirstDelay.TotalSeconds:0} s; vehicles {(PluginConfig.ChestsIncludeVehicles.Value ? "included" : "excluded")}; excluded prefabs: {Csv(PluginConfig.ChestsExcludePrefabs.Value)}");
             }
             else Log.Info("chest scan off (Chests.Enabled = false)");
+            if (PluginConfig.PortalsEnabled.Value)
+            {
+                _portalSchedule = new ScanSchedule(now, ChestFirstDelay, TimeSpan.FromMinutes(PluginConfig.ChestsIntervalMinutes.Value));
+                _portalStatus = "scheduled";
+                Log.Info($"portal scan on: every {PluginConfig.ChestsIntervalMinutes.Value} min (Chests.IntervalMinutes), the first in {ChestFirstDelay.TotalSeconds:0} s; extra prefabs: {Csv(PluginConfig.PortalsExtraPrefabs.Value)}");
+            }
+            else Log.Info("portal scan off (Portals.Enabled = false)");
             if (PluginConfig.RecipesEnabled.Value)
             {
                 _recipesAt = now.AddSeconds(90); _recipesStatus = "scheduled";
@@ -201,14 +216,15 @@ namespace RlValheimLink.Server
 
         private static void TickServerKinds(DateTime now)
         {
-            if (_chestSchedule == null && _recipesAt == DateTime.MaxValue && _recipes == null) return;
+            if (_chestSchedule == null && _portalSchedule == null && _recipesAt == DateTime.MaxValue && _recipes == null) return;
             if (!Configured())
             {
                 // Nothing would reach Raid Ledger: spare the server the scans until the settings are there.
-                if (!_waitingLogged) { _waitingLogged = true; Log.Info("chest scan and recipes export wait for the [RaidLedger] settings"); }
+                if (!_waitingLogged) { _waitingLogged = true; Log.Info("chest scan, portal scan and recipes export wait for the [RaidLedger] settings"); }
                 return;
             }
             TickChests(now);
+            TickPortals(now);
             TickRecipes(now);
         }
 
@@ -262,6 +278,45 @@ namespace RlValheimLink.Server
                 _unreadableWarnAt = now.AddHours(1);
                 Log.Warn($"chest scan: {rep.Unreadable} container(s) could not be decoded in {_unreadableStreak} scans in a row; they are sent as unreadable (no items). A mod that changes the chest format?");
             }
+        }
+
+        private static void TickPortals(DateTime now)
+        {
+            if (_portalSchedule == null) return;
+            if (_portals != null && _portals.Running)
+            {
+                PortalScanner.Result result = null;
+                try { result = _portals.Tick(); }
+                catch (Exception e) { Log.Error("portal scan aborted; the next scan starts on schedule", e); _portalStatus = "aborted"; }
+                if (result != null) FinishPortalScan(result);
+            }
+            if (!_portalSchedule.TryStart(now, _portals != null && _portals.Running, out DateTime slot, out int skipped)) return;
+            if (skipped > 0) Log.Info($"portal scan: {skipped} slot(s) skipped (a scan was still running or the server stalled)");
+            if (_portals == null)
+            {
+                _portals = PortalScanner.Create(CsvSet(PluginConfig.PortalsExtraPrefabs.Value));
+                if (_portals == null) { Log.Warn("portal scan: the world is not loaded yet; trying at the next slot"); return; }
+                Log.Info($"portal scan: {_portals.Prefabs.Count} portal prefabs: {(_portals.Prefabs.Count == 0 ? "none" : string.Join(",", _portals.Prefabs))}");
+            }
+            _portals.Begin(slot);
+            _portalStatus = "scanning";
+        }
+
+        private static void FinishPortalScan(PortalScanner.Result res)
+        {
+            _portalScans++;
+            var msg = PortalsBuilder.Build(new ContainersHeader
+            {
+                ServerId = PluginConfig.ServerId.Value, GameVersion = _gameVersion, ModVersion = Plugin.Version, WorldUid = _worldUid, CapturedAtUtc = res.ScheduledAt,
+            }, res.Portals, out var rep);
+            var r = Enricher.Seal(msg, PluginConfig.ServerId.Value);
+            if (!r.Ok) { Log.Error($"portal scan {_portalScans}: portals message NOT sent, it fails the contract: {Truncate(r.Reason, 400)}"); _portalStatus = "invalid"; return; }
+            var outcome = _spool.Put(r.Kind, r.Key, r.CapturedAt, r.Bytes, r.BlobRefs, DateTime.UtcNow);
+            _portalStatus = $"last {r.CapturedAt} ({rep.Portals} portals)";
+            Log.Info($"portal scan {_portalScans}: {rep.Portals} portals ({rep.Tagged} tagged), {res.Duplicates + rep.Duplicates} duplicates removed, {rep.TagsClipped} tags clipped to {Caps.PortalTagMaxChars}, " +
+                $"{rep.Invalid} without a usable prefab, {rep.Omitted} omitted; {ChestScanner.Ms(res.Ms)} ms over {res.Ticks} ticks (busiest {ChestScanner.Ms(res.BusiestTickMs)} ms); " +
+                $"{r.Key} capturedAt={r.CapturedAt} {r.Bytes.Length} bytes → {outcome}");
+            if (rep.Omitted > 0) Log.Warn($"portal scan {_portalScans}: {rep.Omitted} portal(s) above the contract's {Caps.PortalsMax} dropped");
         }
 
         private static void TickRecipes(DateTime now)
