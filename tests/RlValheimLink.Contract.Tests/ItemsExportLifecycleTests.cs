@@ -27,28 +27,33 @@ public class ItemsExportLifecycleTests : IDisposable
         }
     }
 
-    /// <summary>Spools one items export the way the server half does, then lets the uploader answer it once.</summary>
-    private async Task<(Spool spool, Uploader up, TestLog log)> SpoolAndUpload(HttpStatusCode status, string code)
+    /// <summary>Spools one items export the way the server half does (ServerHalf.OnMessage).</summary>
+    private Spool Spooled()
     {
         var spool = new Spool(_dir);
         Assert.Equal(PutOutcome.Accepted, spool.Put("items", Spool.ItemsKey(Game), At, Encoding.UTF8.GetBytes("{}"), Array.Empty<string>(), DateTime.UtcNow));
         spool.MarkItemsExportQueued(Game, ModSet, At);
-        Assert.Equal(ItemsExportStatus.Queued, spool.ItemsExportState(Game, ModSet)); // spooled is not done
-        Assert.True(spool.HasItemsExport(Game, ModSet));                              // and not asked again while queued
+        return spool;
+    }
 
+    /// <summary>Lets the uploader send the spooled export once and take Raid Ledger's answer.</summary>
+    private static async Task<(Uploader up, TestLog log)> UploadOnce(Spool spool, HttpStatusCode status, string code)
+    {
         var handler = new Answer(status, code);
         var log = new TestLog();
         var client = new RaidLedgerClient(new ClientSettings { BaseUrl = "http://rl.invalid" }, () => "t", handler);
         var up = new Uploader(spool, client, new UploaderSettings { MinInterval = TimeSpan.Zero }, log);
         for (int i = 0; i < 400 && (handler.Calls == 0 || up.State == UploaderState.Sending); i++) { up.Tick(DateTime.UtcNow); await Task.Delay(5); }
         Assert.True(handler.Calls == 1 && up.State != UploaderState.Sending, "the uploader never got its answer:\n" + log);
-        return (spool, up, log);
+        return (up, log);
     }
 
     [Fact]
     public async Task Accepted_upload_marks_the_export_done_and_it_is_never_requested_again()
     {
-        var (spool, _, log) = await SpoolAndUpload(HttpStatusCode.Accepted, "accepted");
+        var spool = Spooled();
+        Assert.Equal(ItemsExportStatus.Queued, spool.ItemsExportState(Game, ModSet)); // spooled is not done yet
+        var (_, log) = await UploadOnce(spool, HttpStatusCode.Accepted, "accepted");
         Assert.Equal(0, spool.PendingCount);
         Assert.Equal(ItemsExportStatus.Accepted, spool.ItemsExportState(Game, ModSet));
         var restarted = new Spool(_dir);
@@ -63,7 +68,8 @@ public class ItemsExportLifecycleTests : IDisposable
     [InlineData(HttpStatusCode.BadRequest, "kind_mismatch")]
     public async Task Permanent_rejection_forgets_the_export_so_the_next_eligible_join_asks_again(HttpStatusCode status, string code)
     {
-        var (spool, _, log) = await SpoolAndUpload(status, code);
+        var spool = Spooled();
+        var (_, log) = await UploadOnce(spool, status, code);
         Assert.Equal(0, spool.PendingCount);
         Assert.False(spool.HasItemsExport(Game, ModSet), $"after a {(int)status} the export must not count as done:\n{log}");
         Assert.False(new Spool(_dir).HasItemsExport(Game, ModSet));
@@ -77,7 +83,8 @@ public class ItemsExportLifecycleTests : IDisposable
     [InlineData(HttpStatusCode.RequestEntityTooLarge, "quota_exceeded")]
     public async Task Transient_failure_keeps_the_export_queued_and_does_not_ask_again(HttpStatusCode status, string code)
     {
-        var (spool, up, log) = await SpoolAndUpload(status, code);
+        var spool = Spooled();
+        var (up, log) = await UploadOnce(spool, status, code);
         Assert.Equal(UploaderState.Backoff, up.State);
         Assert.Equal(1, spool.PendingCount);
         Assert.Equal(ItemsExportStatus.Queued, spool.ItemsExportState(Game, ModSet));
