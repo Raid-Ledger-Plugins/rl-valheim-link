@@ -115,7 +115,7 @@ namespace RlValheimLink.Core
             }
             else
             {
-                r.Key = $"items|{(string)(msg["gameVersion"] as JValue)}";
+                r.Key = Spool.ItemsKey((string)(msg["gameVersion"] as JValue));
             }
 
             var issues = Validator.Validate(msg);

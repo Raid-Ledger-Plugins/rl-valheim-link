@@ -144,6 +144,7 @@ namespace RlValheimLink.Core
                     _state = UploaderState.Idle;
                     _log.Error($"{what} → {r}: dropped (a mod bug, a contract drift or a route mismatch — check contract-drift and the RaidLedger.*Path settings)");
                     if (m != null) _spool.Drop(m); else _spool.DropBlob(sha);
+                    if (m != null && m.Kind == "items") _log.Warn($"{m.Key} was rejected for good, so it does not count as exported: the next client allowed to export (Server.ItemsExportBy) that joins is asked for it again");
                     break;
                 case 409:
                     _state = UploaderState.Idle; _log.Info($"{what} → {r}: treated as done");

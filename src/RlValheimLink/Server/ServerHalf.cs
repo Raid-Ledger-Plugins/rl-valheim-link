@@ -106,6 +106,8 @@ namespace RlValheimLink.Server
                 // Instance URL + server id + token (hashed; never logged) identify the upload target.
                 string fingerprint = Contract.Png.Sha256Hex(MessageJson.Utf8NoBom.GetBytes(
                     PluginConfig.BaseUrl.Value.TrimEnd('/') + "|" + PluginConfig.ServerId.Value + "|" + Contract.Png.Sha256Hex(MessageJson.Utf8NoBom.GetBytes(PluginConfig.ServerToken.Value ?? "")))).Substring(0, 16);
+                if (_spool.StaleItemsMarkersCleared > 0)
+                    Log.Info($"{_spool.StaleItemsMarkersCleared} items export marker(s) had no accepted upload (set before 0.4.3 when the export was only spooled): the next client allowed to export is asked again");
                 if (_spool.ResetIfTargetChanged(fingerprint))
                     Log.Info("upload target changed (instance, server id or token): forgot what was uploaded before — the base map and the items export will be sent again");
                 _baseMap = PluginConfig.BaseMapEnabled.Value
@@ -478,7 +480,9 @@ namespace RlValheimLink.Server
             if (outcome == PutOutcome.DroppedOlder) return;
             if (kind == PayloadKind.Items && facts.ModSetHash != null && facts.GameVersion != null)
             {
-                _spool.MarkItemsExport(facts.GameVersion, facts.ModSetHash, r.CapturedAt);
+                // Queued, not done: it becomes done when Raid Ledger accepts the upload (Spool.MarkUploaded), and a
+                // permanent rejection forgets it so the next eligible join asks again (ROK-2059).
+                _spool.MarkItemsExportQueued(facts.GameVersion, facts.ModSetHash, r.CapturedAt);
                 _itemsLeasePeer = null;
             }
             LinkChannel.SendControl(sender, "ack", $"{kindName} {r.CapturedAt}");

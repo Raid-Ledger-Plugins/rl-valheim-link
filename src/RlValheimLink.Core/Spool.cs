@@ -29,6 +29,9 @@ namespace RlValheimLink.Core
 
     public enum PutOutcome { Accepted, ReplacedPending, DroppedOlder }
 
+    /// <summary>Where the items export for a (game version, mod set) stands (ROK-2059).</summary>
+    public enum ItemsExportStatus { None, Queued, Accepted }
+
     /// <summary>
     /// Disk-backed queue of pending uploads with latest-wins dedupe (design §5). One file per snapshot
     /// key under pending/, blobs by sha256 under blobs/, bookkeeping in index.json. Survives restarts.
@@ -42,8 +45,10 @@ namespace RlValheimLink.Core
             public Dictionary<string, string> LastUploaded = new Dictionary<string, string>();
             public Dictionary<string, PendingMessage> Pending = new Dictionary<string, PendingMessage>();
             public Dictionary<string, SpoolBlob> Blobs = new Dictionary<string, SpoolBlob>();
-            /// <summary>"gameVersion|modSetHash" → capturedAt of the accepted items export.</summary>
+            /// <summary>"gameVersion|modSetHash" → capturedAt of the items export Raid Ledger accepted (2xx/409 for that upload).</summary>
             public Dictionary<string, string> ItemsExports = new Dictionary<string, string>();
+            /// <summary>"gameVersion|modSetHash" → capturedAt of an items export spooled but not yet accepted (ROK-2059).</summary>
+            public Dictionary<string, string> ItemsExportsQueued = new Dictionary<string, string>();
             /// <summary>"gameVersion|modSetHash" (the server's own mod set) → capturedAt of the spooled recipes export.</summary>
             public Dictionary<string, string> RecipesExports = new Dictionary<string, string>();
             /// <summary>Fingerprint of the upload target (instance URL, server id, token) the markers above belong to.</summary>
@@ -68,6 +73,12 @@ namespace RlValheimLink.Core
         public string Root => _root;
         public int PendingCount => _index.Pending.Count;
 
+        /// <summary>
+        /// Items-export markers dropped at load because no upload of theirs was ever accepted: before 0.4.3 the
+        /// marker was set when the export was spooled, so a rejected upload left the catalogue missing for good.
+        /// </summary>
+        public int StaleItemsMarkersCleared { get; private set; }
+
         private void Load()
         {
             if (!File.Exists(_indexPath)) return;
@@ -80,6 +91,29 @@ namespace RlValheimLink.Core
             gone.Clear();
             foreach (var kv in _index.Blobs) if (!kv.Value.Uploaded && !File.Exists(BlobPath(kv.Key))) gone.Add(kv.Key);
             foreach (var k in gone) _index.Blobs.Remove(k);
+            if (_index.ItemsExportsQueued == null) _index.ItemsExportsQueued = new Dictionary<string, string>();
+            if (_index.ItemsExports == null) _index.ItemsExports = new Dictionary<string, string>();
+            ReconcileItemsMarkers();
+        }
+
+        /// <summary>
+        /// An accepted marker is only valid when an upload of its spool key at or after its capturedAt was
+        /// accepted (<see cref="LastUploaded(string)"/>). Any other is a pre-0.4.3 spool-time marker: back to
+        /// queued while its message is still pending, otherwise forgotten so the next eligible client is asked.
+        /// </summary>
+        private void ReconcileItemsMarkers()
+        {
+            StaleItemsMarkersCleared = 0;
+            foreach (var kv in new List<KeyValuePair<string, string>>(_index.ItemsExports))
+            {
+                string key = ItemsKeyOfMarker(kv.Key);
+                string up = LastUploaded(key);
+                if (up != null && Compare(kv.Value, up) <= 0) continue;
+                _index.ItemsExports.Remove(kv.Key);
+                if (_index.Pending.ContainsKey(key)) _index.ItemsExportsQueued[kv.Key] = kv.Value;
+                else StaleItemsMarkersCleared++;
+            }
+            if (StaleItemsMarkersCleared > 0) Save();
         }
 
         private void Save()
@@ -126,6 +160,7 @@ namespace RlValheimLink.Core
                 try { File.Delete(m.File); } catch (IOException) { }
             }
             if (!_index.LastUploaded.TryGetValue(m.Key, out var last) || Compare(m.CapturedAt, last) > 0) _index.LastUploaded[m.Key] = m.CapturedAt;
+            SettleItemsExports(m, accepted: true);
             Save();
         }
 
@@ -136,7 +171,24 @@ namespace RlValheimLink.Core
             {
                 _index.Pending.Remove(m.Key);
                 try { File.Delete(m.File); } catch (IOException) { }
-                Save();
+            }
+            SettleItemsExports(m, accepted: false);
+            Save();
+        }
+
+        /// <summary>
+        /// Resolves the queued items-export markers this upload answers: its key, captured at or before it (an
+        /// older export of another mod set under the same key was replaced by this one, latest wins). Accepted →
+        /// the export is done; dropped → the marker goes, so the next eligible client join asks again.
+        /// </summary>
+        private void SettleItemsExports(PendingMessage m, bool accepted)
+        {
+            if (m.Kind != "items") return;
+            foreach (var kv in new List<KeyValuePair<string, string>>(_index.ItemsExportsQueued))
+            {
+                if (ItemsKeyOfMarker(kv.Key) != m.Key || Compare(kv.Value, m.CapturedAt) > 0) continue;
+                _index.ItemsExportsQueued.Remove(kv.Key);
+                if (accepted) _index.ItemsExports[kv.Key] = kv.Value;
             }
         }
 
@@ -189,11 +241,33 @@ namespace RlValheimLink.Core
 
         // ---------- items and recipes export bookkeeping ----------
 
-        public bool HasItemsExport(string gameVersion, string modSetHash) => _index.ItemsExports.ContainsKey(gameVersion + "|" + modSetHash);
+        /// <summary>The spool key of the items export for a game version (latest wins per game version).</summary>
+        public static string ItemsKey(string gameVersion) => "items|" + gameVersion;
 
-        public void MarkItemsExport(string gameVersion, string modSetHash, string capturedAt)
+        private static string ItemsKeyOfMarker(string marker)
         {
-            _index.ItemsExports[gameVersion + "|" + modSetHash] = capturedAt;
+            int bar = marker.LastIndexOf('|');
+            return ItemsKey(bar < 0 ? marker : marker.Substring(0, bar));
+        }
+
+        /// <summary>
+        /// Whether a client must NOT be asked for this (game version, mod set): Raid Ledger accepted its export,
+        /// or one is spooled and still waiting to upload (transient failures retry it; asking again would only
+        /// replace it). False after a permanent rejection, so the next eligible client join asks again.
+        /// </summary>
+        public bool HasItemsExport(string gameVersion, string modSetHash) => ItemsExportState(gameVersion, modSetHash) != ItemsExportStatus.None;
+
+        public ItemsExportStatus ItemsExportState(string gameVersion, string modSetHash)
+        {
+            string k = gameVersion + "|" + modSetHash;
+            if (_index.ItemsExports.ContainsKey(k)) return ItemsExportStatus.Accepted;
+            return _index.ItemsExportsQueued.ContainsKey(k) && _index.Pending.ContainsKey(ItemsKey(gameVersion)) ? ItemsExportStatus.Queued : ItemsExportStatus.None;
+        }
+
+        /// <summary>An items export for (game version, mod set) was spooled; it counts as done only once Raid Ledger accepts the upload.</summary>
+        public void MarkItemsExportQueued(string gameVersion, string modSetHash, string capturedAt)
+        {
+            _index.ItemsExportsQueued[gameVersion + "|" + modSetHash] = capturedAt;
             Save();
         }
 
