@@ -429,9 +429,10 @@ namespace RlValheimLink.Server
         private static void MaybeRequestItems(long sender, PeerFacts facts, string gameVersion, string modSetHash)
         {
             if (string.IsNullOrEmpty(gameVersion) || string.IsNullOrEmpty(modSetHash)) return;
-            if (_spool.HasItemsExport(gameVersion, modSetHash)) return;
-            if (!MayExport(facts)) return;
             var now = DateTime.UtcNow;
+            // Accepted, queued, or cooling down after a permanent rejection (logged once, when it was rejected).
+            if (!_spool.ShouldRequestItems(gameVersion, modSetHash, now)) return;
+            if (!MayExport(facts)) return;
             if (_itemsLeasePeer != null && now < _itemsLeaseUntil) return;
             _itemsLeasePeer = sender.ToString(); _itemsLeaseUntil = now.AddMinutes(10);
             Log.Info($"peer {sender}: asking for the items export (game {gameVersion}, mod set {modSetHash.Substring(0, Math.Min(12, modSetHash.Length))}…)");
@@ -456,6 +457,13 @@ namespace RlValheimLink.Server
             if (json == null) { Log.Warn($"peer {sender}: {kindName} gzip invalid or over {cap} bytes; dropped"); return; }
             JObject obj;
             try { obj = MessageJson.Parse(json) as JObject; } catch (Exception e) { Log.Warn($"peer {sender}: {kindName} is not JSON ({e.Message}); dropped"); return; }
+            // The export marker is keyed by the hello's game version and the spool by the message's: they must agree.
+            if (kind == PayloadKind.Items && facts.GameVersion != null && obj != null && (string)(obj["gameVersion"] as JValue) != facts.GameVersion)
+            {
+                Log.Warn($"peer {sender}: items gameVersion differs from its hello's ({facts.GameVersion}); dropped");
+                LinkChannel.SendControl(sender, "reject", "items: gameVersion differs from hello");
+                return;
+            }
 
             var ctx = new EnrichContext
             {

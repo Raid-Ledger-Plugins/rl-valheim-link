@@ -32,6 +32,13 @@ namespace RlValheimLink.Core
     /// <summary>Where the items export for a (game version, mod set) stands (ROK-2059).</summary>
     public enum ItemsExportStatus { None, Queued, Accepted }
 
+    /// <summary>Permanent rejections of an items export for one (game version, mod set) and when it may be asked for again.</summary>
+    public sealed class ItemsRejection
+    {
+        public int Count;
+        public DateTime UntilUtc;
+    }
+
     /// <summary>
     /// Disk-backed queue of pending uploads with latest-wins dedupe (design §5). One file per snapshot
     /// key under pending/, blobs by sha256 under blobs/, bookkeeping in index.json. Survives restarts.
@@ -49,6 +56,8 @@ namespace RlValheimLink.Core
             public Dictionary<string, string> ItemsExports = new Dictionary<string, string>();
             /// <summary>"gameVersion|modSetHash" → capturedAt of an items export spooled but not yet accepted (ROK-2059).</summary>
             public Dictionary<string, string> ItemsExportsQueued = new Dictionary<string, string>();
+            /// <summary>"gameVersion|modSetHash" → its permanent rejections: no client is asked again before UntilUtc.</summary>
+            public Dictionary<string, ItemsRejection> ItemsExportsRejected = new Dictionary<string, ItemsRejection>();
             /// <summary>"gameVersion|modSetHash" (the server's own mod set) → capturedAt of the spooled recipes export.</summary>
             public Dictionary<string, string> RecipesExports = new Dictionary<string, string>();
             /// <summary>Fingerprint of the upload target (instance URL, server id, token) the markers above belong to.</summary>
@@ -93,6 +102,7 @@ namespace RlValheimLink.Core
             foreach (var k in gone) _index.Blobs.Remove(k);
             if (_index.ItemsExportsQueued == null) _index.ItemsExportsQueued = new Dictionary<string, string>();
             if (_index.ItemsExports == null) _index.ItemsExports = new Dictionary<string, string>();
+            if (_index.ItemsExportsRejected == null) _index.ItemsExportsRejected = new Dictionary<string, ItemsRejection>();
             ReconcileItemsMarkers();
         }
 
@@ -113,7 +123,16 @@ namespace RlValheimLink.Core
                 if (_index.Pending.ContainsKey(key)) _index.ItemsExportsQueued[kv.Key] = kv.Value;
                 else StaleItemsMarkersCleared++;
             }
-            if (StaleItemsMarkersCleared > 0) Save();
+            // A queued marker whose pending message vanished would otherwise read as queued again as soon as
+            // another export for the same game version is spooled, and block its own mod set for good.
+            int orphans = 0;
+            foreach (var kv in new List<KeyValuePair<string, string>>(_index.ItemsExportsQueued))
+            {
+                if (_index.Pending.ContainsKey(ItemsKeyOfMarker(kv.Key))) continue;
+                _index.ItemsExportsQueued.Remove(kv.Key);
+                orphans++;
+            }
+            if (StaleItemsMarkersCleared > 0 || orphans > 0) Save();
         }
 
         private void Save()
@@ -160,36 +179,58 @@ namespace RlValheimLink.Core
                 try { File.Delete(m.File); } catch (IOException) { }
             }
             if (!_index.LastUploaded.TryGetValue(m.Key, out var last) || Compare(m.CapturedAt, last) > 0) _index.LastUploaded[m.Key] = m.CapturedAt;
-            SettleItemsExports(m, accepted: true);
+            SettleItemsExports(m, accepted: true, DateTime.UtcNow);
             Save();
         }
 
         /// <summary>Drop a pending message the server will never accept (400 etc.). The dedupe watermark stays.</summary>
-        public void Drop(PendingMessage m)
+        public void Drop(PendingMessage m) => Drop(m, DateTime.UtcNow);
+
+        /// <summary>
+        /// As <see cref="Drop(PendingMessage)"/>. For an items export, returns until when its (game version, mod
+        /// set) is not asked for again (<see cref="ItemsRetryBase"/> doubling per rejection up to
+        /// <see cref="ItemsRetryMax"/>), or null when no queued export was settled.
+        /// </summary>
+        public DateTime? Drop(PendingMessage m, DateTime nowUtc)
         {
             if (_index.Pending.TryGetValue(m.Key, out var cur) && cur.CapturedAt == m.CapturedAt)
             {
                 _index.Pending.Remove(m.Key);
                 try { File.Delete(m.File); } catch (IOException) { }
             }
-            SettleItemsExports(m, accepted: false);
+            var until = SettleItemsExports(m, accepted: false, nowUtc);
             Save();
+            return until;
         }
+
+        /// <summary>First wait after a permanent rejection of an items export; doubles per further rejection.</summary>
+        public static readonly TimeSpan ItemsRetryBase = TimeSpan.FromHours(1);
+        /// <summary>Longest wait between two requests of a deterministically rejected items export.</summary>
+        public static readonly TimeSpan ItemsRetryMax = TimeSpan.FromHours(24);
 
         /// <summary>
         /// Resolves the queued items-export markers this upload answers: its key, captured at or before it (an
         /// older export of another mod set under the same key was replaced by this one, latest wins). Accepted →
-        /// the export is done; dropped → the marker goes, so the next eligible client join asks again.
+        /// the export is done and any rejection record goes; dropped → the marker goes and a cool-down starts,
+        /// after which the next eligible client join asks again (ROK-2059).
         /// </summary>
-        private void SettleItemsExports(PendingMessage m, bool accepted)
+        private DateTime? SettleItemsExports(PendingMessage m, bool accepted, DateTime nowUtc)
         {
-            if (m.Kind != "items") return;
+            if (m.Kind != "items") return null;
+            DateTime? until = null;
             foreach (var kv in new List<KeyValuePair<string, string>>(_index.ItemsExportsQueued))
             {
                 if (ItemsKeyOfMarker(kv.Key) != m.Key || Compare(kv.Value, m.CapturedAt) > 0) continue;
                 _index.ItemsExportsQueued.Remove(kv.Key);
-                if (accepted) _index.ItemsExports[kv.Key] = kv.Value;
+                if (accepted) { _index.ItemsExports[kv.Key] = kv.Value; _index.ItemsExportsRejected.Remove(kv.Key); continue; }
+                var rej = _index.ItemsExportsRejected.TryGetValue(kv.Key, out var r) ? r : new ItemsRejection();
+                rej.Count++;
+                double hours = Math.Min(ItemsRetryMax.TotalHours, ItemsRetryBase.TotalHours * Math.Pow(2, Math.Min(10, rej.Count - 1)));
+                rej.UntilUtc = nowUtc + TimeSpan.FromHours(hours);
+                _index.ItemsExportsRejected[kv.Key] = rej;
+                if (until == null || rej.UntilUtc > until) until = rej.UntilUtc;
             }
+            return until;
         }
 
         // ---------- blobs ----------
@@ -264,6 +305,21 @@ namespace RlValheimLink.Core
             return _index.ItemsExportsQueued.ContainsKey(k) && _index.Pending.ContainsKey(ItemsKey(gameVersion)) ? ItemsExportStatus.Queued : ItemsExportStatus.None;
         }
 
+        /// <summary>
+        /// Whether a joining eligible client should be asked for the items export: none accepted or queued, and
+        /// no permanent-rejection cool-down running for this (game version, mod set).
+        /// </summary>
+        public bool ShouldRequestItems(string gameVersion, string modSetHash, DateTime nowUtc)
+        {
+            if (HasItemsExport(gameVersion, modSetHash)) return false;
+            var until = ItemsRetryAfter(gameVersion, modSetHash);
+            return until == null || nowUtc >= until.Value;
+        }
+
+        /// <summary>Until when a permanently rejected items export is not asked for again; null when it never was rejected.</summary>
+        public DateTime? ItemsRetryAfter(string gameVersion, string modSetHash) =>
+            _index.ItemsExportsRejected.TryGetValue(gameVersion + "|" + modSetHash, out var r) ? r.UntilUtc : (DateTime?)null;
+
         /// <summary>An items export for (game version, mod set) was spooled; it counts as done only once Raid Ledger accepts the upload.</summary>
         public void MarkItemsExportQueued(string gameVersion, string modSetHash, string capturedAt)
         {
@@ -315,6 +371,7 @@ namespace RlValheimLink.Core
             {
                 _index.LastUploaded.Clear();
                 _index.ItemsExports.Clear();
+                _index.ItemsExportsRejected.Clear();
                 _index.RecipesExports.Clear();
                 var gone = new List<string>();
                 foreach (var kv in _index.Blobs)
