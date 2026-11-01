@@ -5,16 +5,19 @@
 **Server-only feature** (Raid Ledger ROK-1945). Clients and the modpack need nothing.
 
 - Portals now appear on the Raid Ledger map without anyone pinning them. The dedicated server's scan finds
-  every portal in the world on the chest scan's grid (2 minutes after start, then every
-  `Chests.IntervalMinutes`) and sends a full `portals` snapshot (prefab, position, pairing tag; CONTRACT.md
+  every portal in the world on the chest scan's interval (3 minutes after start, a minute after the chest
+  scan so the two never walk the world on the same tick, then every `Chests.IntervalMinutes`) and sends a full `portals` snapshot (prefab, position, pairing tag; CONTRACT.md
   §5c), so a destroyed portal disappears at the next scan. Portal prefabs are every prefab with the game's
   portal component, which covers vanilla `portal_wood` / `portal_stone` and portals cloned from them
-  (AdvancedPortals); XPortal keeps its tag in the vanilla tag field and needs nothing extra. The prefabs are
-  logged once (`RLVL: portal scan: <n> portal prefabs: …`), each scan as `RLVL: portal scan <n>: …`.
+  (AdvancedPortals). XPortal appears to keep its name in the vanilla tag field (observed in the server log;
+  unverified). The prefabs are logged once (`RLVL: portal scan: <n> portal prefabs: …`), each scan as `RLVL: portal scan <n>: …`.
 - New `[Portals] Enabled` (default `true`) switches it off independently of `[Chests] Enabled`;
   `[Portals] ExtraPrefabs` adds a modded portal without that component. Tags longer than the contract's 64
   characters are clipped, a duplicate piece at one position is sent once, and above 4 096 portals the rest
-  is counted in `omitted`. Tags and positions are never logged.
+  is counted in `omitted`. Tags and positions are never logged. If no portal prefab is found at all (broken
+  discovery, not an empty world) nothing is sent, so Raid Ledger's portals are not wiped: one WARN
+  (`RLVL: portal scan: 0 portal prefabs found …`) and a retry at each slot. `[Portals] ExtraPrefabs` entries
+  that are not prefabs get one WARN.
 - No wire-format change (`portals` is already in the pinned contract v1).
 
 ## 0.4.3 — 2026-11-01

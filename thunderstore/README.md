@@ -62,7 +62,7 @@ leaves your PC except through the game server you are playing on.
   `[Chests] IntervalMinutes` (5–120) sets the scan interval. The 0.2.1 chest diagnostic is now off
   (`[Chests] DiagnosticDump`).
 - **Portals (0.4.4+, dedicated server only, on by default):** on the chest scan's grid the server finds
-  every portal in the world (vanilla, AdvancedPortals, XPortal-tagged) and sends their positions and tags
+  every portal in the world (vanilla, AdvancedPortals; XPortal names expected, unverified) and sends their positions and tags
   (`RLVL: portal scan <n>: … → Accepted`), so they show on the Raid Ledger map. `[Portals] Enabled = false`
   switches it off; `[Portals] ExtraPrefabs` adds a modded portal the scan does not recognise.
 - **Planner icons (0.4.0+):** the server cannot draw the icons of build pieces and crafting stations, so

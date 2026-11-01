@@ -289,14 +289,14 @@ by default listed in `adminlist.txt`). Other players can stay on older versions.
 Install 0.4.4 on the **server** only. Nothing to configure (`[Portals] Enabled` defaults to `true`).
 
 30. **Start.** After the chest scan line of step 17:
-    `RLVL: portal scan on: every 10 min (Chests.IntervalMinutes), the first in 120 s; extra prefabs: none`.
-31. **First portal scan, ~2 min after start:**
+    `RLVL: portal scan on: every 10 min (Chests.IntervalMinutes), the first in 180 s; extra prefabs: none`.
+31. **First portal scan, ~3 min after start (a minute after the first chest scan):**
     `RLVL: portal scan: <n> portal prefabs: <list>`. UNVERIFIED until this line: expect `portal_stone,portal_wood`
     plus AdvancedPortals' Ancient / Obsidian / Black Marble portals on the GamerSaloon server (their exact names
     come from this line). Then `RLVL: portal scan 1: <p> portals (<t> tagged), <d> duplicates removed, <c> tags clipped to 64, <i> without a usable prefab, <o> omitted; <ms> ms over <k> ticks (busiest <ms> ms); portals|<world uid> capturedAt=<time> <bytes> bytes → Accepted`
     and `RLVL: POST portals portals|<world uid> → 202 accepted in <ms> ms`. `<p>` should match the portals you
-    know of; `<t>` the ones with a name (XPortal names count: XPortal writes the vanilla tag).
+    know of; `<t>` the ones with a name (XPortal names should count if XPortal writes the vanilla tag, as observed in the server log; unverified, confirm here).
 32. **Raid Ledger:** the map shows the portals with their tags; destroy or rename one, and after the next scan
     (≤ 10 min) the map follows.
 33. **Problems to paste back:** `RLVL: portal scan aborted …`, `RLVL: portal scan <n>: portals message NOT sent …`,
-    `0 portal prefabs`, or a POST that is not `202 accepted`.
+    `RLVL: portal scan: 0 portal prefabs found …`, `RLVL: portal scan: [Portals] ExtraPrefabs not found …`, or a POST that is not `202 accepted`.
