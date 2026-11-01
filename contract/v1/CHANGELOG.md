@@ -3,6 +3,27 @@
 Newest first. Every entry states **additive** or **breaking** (see
 `CONTRACT.md` → Versioning). Only a Raid Ledger PR may add an entry.
 
+## v1 — 2026-10-26 (additive, doc only) — `recipes` q1 upgrade items + planner step view
+
+- **Additive, no wire change** (documentation and semantics only;
+  `schema.json`, the Zod source and the fixtures are untouched). CONTRACT §5b
+  gains `consumed(r, q)`: on 1.0.x an upgrade item (`upgraderResource`) costs
+  0 on a fresh q1 craft (operator in-game check 2026-10-25) and
+  `amount(r, q)` from q2; the craft/upgrade sums use it. `amount(r, q)` still
+  mirrors `GetAmount(q)`, so the mod's `formula` check is unchanged. The
+  "UNVERIFIED in game" sentence is replaced by the ruling. New paragraph on
+  the planner's per-quality step view (ROK-1861): steps at an `upgrader`
+  station show as upgrade steps and list that station's `pieces[]` build cost
+  once, never netted; an undiscovered upgrader stays hidden under spoiler
+  protection.
+
+## v1 — 2026-10-24 (additive, doc only) — `portals` stored
+
+- **Additive, no wire change.** The server now stores `portals` (ROK-1946):
+  the latest scan replaces the world's portals; older or equal `capturedAt`
+  is skipped as stale. §5c's "accepted without storing" sentence updated.
+  `schema.json` and fixtures unchanged.
+
 ## v1 — 2026-10-23 (additive) — `portals`
 
 - **Additive.** New message `kind: "portals"` (ROK-1944): every portal in the
