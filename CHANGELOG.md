@@ -10,11 +10,18 @@
   someone cleared the mod's state by hand. Now a spooled export is only *queued*: it becomes done when
   Raid Ledger accepts that upload (2xx, or 409 already have it), a permanent rejection logs one WARN
   (`items|<game> was rejected for good …`) and forgets it, so the next client allowed by
-  `Server.ItemsExportBy` that joins is asked again (once per join, under the existing 10-minute lease).
+  `Server.ItemsExportBy` that joins is asked again once a cool-down has passed: 1 h after the first
+  rejection of that (game version, mod set), doubling per further rejection up to 24 h, so a rejection that
+  repeats every time (size cap, contract drift) no longer costs a client capture and upload on every join.
+  The cool-down is kept in `index.json` (survives a restart), is logged once with the rejection, and is
+  reset when an upload for that key is accepted or the Raid Ledger target changes.
   Transient failures (5xx, network, 429, 413 `quota_exceeded`) keep the export queued and retrying, and
   no client is asked again meanwhile.
 - On start the server forgets "done" markers left by 0.4.2 and older whose upload was never accepted
   (logged once), so a catalogue already stuck this way is requested again at the next eligible join.
+- An items message whose `gameVersion` differs from its client's hello is dropped (logged, the client is
+  told), so the export marker and the spooled upload cannot end up under different game versions.
+- A queued export marker whose spooled file vanished is pruned at start instead of lingering in `index.json`.
 - No wire-format change.
 
 ## 0.4.2 — 2026-10-24
