@@ -145,7 +145,11 @@ ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
 - `hello` (kind 0) is sent once per session after the local player spawns:
   `{ modVersion, gameVersion, modSetHash }`. The server answers `needItems`
   when it has no items export for (`gameVersion`, `modSetHash`) and the
-  client is allowed to export (§9 Q3). A `reject` whose arg starts with
+  client is allowed to export (§9 Q3). An export counts once Raid Ledger
+  accepted its upload (2xx/409); one still spooled for upload also stops a
+  new request (transient failures retry it), and one rejected for good
+  (400/404/413/415/422) is forgotten so the next eligible hello asks again
+  (0.4.3, ROK-2059; before that the export counted as soon as it was spooled). A `reject` whose arg starts with
   `hello: ` declines the whole session (the loaded world is not in
   `Server.WorldAllowlist`, §8): the client stops capturing until it
   reconnects; a `reject` without that prefix concerns one transfer.

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.3 — 2026-11-01
+
+**Server-only fix** (Raid Ledger ROK-2059). Clients and the modpack need nothing.
+
+- The server counted an items export as done for (game version, mod set) as soon as it was spooled, before
+  Raid Ledger answered. When the upload was then rejected for good (413 over the size cap, 422 schema,
+  400), no client was ever asked again and the item catalogue for that game version stayed missing until
+  someone cleared the mod's state by hand. Now a spooled export is only *queued*: it becomes done when
+  Raid Ledger accepts that upload (2xx, or 409 already have it), a permanent rejection logs one WARN
+  (`items|<game> was rejected for good …`) and forgets it, so the next client allowed by
+  `Server.ItemsExportBy` that joins is asked again (once per join, under the existing 10-minute lease).
+  Transient failures (5xx, network, 429, 413 `quota_exceeded`) keep the export queued and retrying, and
+  no client is asked again meanwhile.
+- On start the server forgets "done" markers left by 0.4.2 and older whose upload was never accepted
+  (logged once), so a catalogue already stuck this way is requested again at the next eligible join.
+- No wire-format change.
+
 ## 0.4.2 — 2026-10-24
 
 **Client fix** (players get it through the modpack; the server needs nothing new).
