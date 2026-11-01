@@ -100,8 +100,21 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   `py * size + px`, `py = 0` south — the same layout the contract's bitset
   uses, so packing is a straight loop),
   `m_pins` where `m_save` is true (transient Player/Ping/Shout/event pins are
-  not saved and not sent); `shared = m_ownerID != 0` (UNVERIFIED: vanilla sets
-  `m_ownerID` on pins that arrived from a cartography table).
+  not saved and not sent); `shared = m_ownerID != 0`. Verified from the 0.221.4
+  IL (ROK-1881; the 1.0.20 reference assembly has the same `PinData` fields and
+  `AddPin(…, long ownerID = 0, PlatformUserID author)` signature but stripped
+  bodies): `AddSharedMapData` skips table pins whose owner is the local player and
+  adds the rest via `AddPin` with the writer's owner id; the player's own pins
+  carry 0 (`GetSharedMapData` writes them under the local player id);
+  `OnMapLeftClick` on a shared pin sets `m_ownerID = 0` (adopts it); `UpdatePins`
+  hides `m_ownerID != 0` pins when the shared layer is toggled off. There is no
+  `m_shared` field. `label` = `Localization.instance.Localize(m_name)` (names
+  can be `$…` tokens), then Core `MapPins.Label`: rich-text tags stripped,
+  control characters to spaces, trimmed, clipped to 64 UTF-16 units, "" when
+  nothing is left. `m_author` (platform user id) is not sent: the contract has
+  no field for it. Pin types outside the vanilla enum `ToString()` to a bare
+  integer and are sent as that integer (open type set; generic icon), logged
+  once per value.
 - Items: `ObjectDB.instance.m_items` → `ItemDrop.m_itemData.m_shared`:
   `Localization.instance.Localize(m_name)` for `name`, `m_itemType.ToString()`
   for `category`, `m_maxStackSize`, `m_maxQuality`, `m_variants`,
@@ -377,6 +390,13 @@ future per-file mode can without a contract change. Things noted for the Raid Le
 `Ping`, `EventArea`, `Hildir1-3` and `None`; only saved pins are sent.
 `ItemType` now has `Trinket`, `TwoHandedWeaponLeft`, `AmmoNonEquipable`,
 `Attach_Atgeir`, `Fish` — all open-set in the contract, so fine.
+
+
+**Not requested (ROK-1881 notes):** a readable name for modded pin types (a mod
+that casts a new value onto `Minimap.PinType` has no name to send; it would need
+a new optional field, i.e. a Raid Ledger contract story) and the pin author
+(`PinData.m_author`, a platform user id — personal data; also a contract story
+if ever wanted).
 
 ## 11. Verification plan
 
