@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.6 — 2026-11-01
+
+**Server-only config change.** Clients and the modpack need nothing.
+
+- `[Server] ItemsExportBy` now defaults to `anyone` (was `admins`): a new game version's item catalogue
+  and piece icons arrive on the first join of any player with the mod, not only an admin's. The groups
+  this mod serves are small and do not forge item lists; `admins` and `nobody` remain available.
+- **One-time migration of existing config files.** BepInEx keeps a value already written to the file, so
+  on first start of 0.4.6 a file that still says `ItemsExportBy = admins` (the old default) is rewritten
+  to `anyone` and the log says so once (`RLVL: config: [Server] ItemsExportBy changed from admins …`).
+  `anyone` and `nobody` are left as they are. The new internal `[Server] ConfigRevision = 1` records that
+  this ran, so it never runs again: to keep admins only, set `ItemsExportBy = admins` after the upgrade
+  and it is kept.
+- No wire-format change.
+
 ## 0.4.5 — 2026-11-01
 
 **Client fix** (Raid Ledger ROK-1881). Players update the mod for their own pins to be relabelled; the
