@@ -14,6 +14,7 @@ namespace RlValheimLink
         // [Server]
         public static ConfigEntry<bool> TrustClientSteamId, RequireExactModVersion;
         public static ConfigEntry<string> ItemsExportBy, WorldAllowlist;
+        public static ConfigEntry<int> ConfigRevision;
         // [BaseMap]
         public static ConfigEntry<bool> BaseMapEnabled;
         public static ConfigEntry<int> BaseMapRowsPerTick, BaseMapTextureSize;
@@ -52,7 +53,8 @@ namespace RlValheimLink
 
             TrustClientSteamId = cfg.Bind("Server", "TrustClientSteamId", false, "Server only. Accept the client's steamId claim when the peer's socket identity is not a SteamID64 (crossplay/PlayFab). Off = such peers are skipped.");
             RequireExactModVersion = cfg.Bind("Server", "RequireExactModVersion", false, "Server only. Reject clients whose mod version differs from the server's. Off (default): any client speaking the same RPC protocol is accepted and its version is logged, so server-side updates never force a modpack update.");
-            ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "admins", new ConfigDescription("Server only. Which clients may produce the items export when asked: admins | anyone | nobody.", new AcceptableValueList<string>("admins", "anyone", "nobody")));
+            ItemsExportBy = cfg.Bind("Server", "ItemsExportBy", "anyone", new ConfigDescription("Server only. Which clients may produce the items export (and the piece icon atlas) when asked: anyone | admins | nobody. Default anyone (0.4.6): the small groups this mod is built for do not forge item lists, and a new game version's catalogue then arrives on the first join of any player with the mod. admins (SteamID64 in adminlist.txt) remains available.", new AcceptableValueList<string>("anyone", "admins", "nobody")));
+            ConfigRevision = cfg.Bind("Server", "ConfigRevision", 0, "Internal; do not edit. Which one-time config migrations have run on this file (1 = 0.4.6 moved ItemsExportBy from the old default admins to anyone).");
             WorldAllowlist = cfg.Bind("Server", "WorldAllowlist", "", "Server only. Comma-separated world names (case-insensitive) this server links to Raid Ledger; empty = every world. When the loaded world is not listed the link stays idle: no base map, clients are told the world is not linked, nothing is spooled or uploaded. Set it to your production world when the same server is sometimes booted into a test world.");
 
             BaseMapEnabled = cfg.Bind("BaseMap", "Enabled", true, "Server only. Render the world's base map PNG once per (world, game version).");
@@ -83,6 +85,24 @@ namespace RlValheimLink
             PortalsExtraPrefabs = cfg.Bind("Portals", "ExtraPrefabs", "", "Dedicated server only. Comma-separated portal prefabs to scan although they have no TeleportWorld component (a modded portal built some other way). Vanilla portals and portals cloned from them (e.g. AdvancedPortals) are found without this.");
 
             RecipesEnabled = cfg.Bind("Recipes", "Enabled", true, "Dedicated server only. Send the server's crafting recipes, build pieces, crafting stations and processing steps (smelter, kiln, fermenter, cooking, obliterator…) to Raid Ledger as a `recipes` snapshot, once per game version and server mod set, about 90 s after start. On by default; set false to switch it off.");
+
+            MigrateOnce(cfg);
+        }
+
+        /// <summary>One-time rewrites of defaults that changed (decision: <see cref="Core.ConfigMigration"/>).</summary>
+        private static void MigrateOnce(ConfigFile cfg)
+        {
+            int before = ConfigRevision.Value;
+            var r = Core.ConfigMigration.Migrate(ItemsExportBy.Value, before);
+            if (!r.NeedsSave(before)) return;
+            if (r.ItemsExportByChanged)
+            {
+                ItemsExportBy.Value = r.ItemsExportBy;
+                Log.Info("config: [Server] ItemsExportBy changed from admins (the old default) to anyone (the 0.4.6 default): any player with the mod may now produce the item catalogue. " +
+                         "To keep admins only, set ItemsExportBy = admins in RaidLedger.ValheimLink.cfg; it will not be changed again.");
+            }
+            ConfigRevision.Value = r.Revision;
+            cfg.Save();
         }
     }
 }
