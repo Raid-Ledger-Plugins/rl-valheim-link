@@ -84,6 +84,8 @@ Sent on every vanilla save broadcast, on logout and on quit.
 | `trophies[]` (≤ 1024) | prefab ids | `m_trophies`. |
 | `knownItems[]` (≤ 8192) | prefab ids | Discovered materials/items (`m_knownMaterial`). |
 | `knownRecipes[]` (≤ 8192) | prefab ids | Craftable recipe item ids (`m_knownRecipes`). |
+| `deaths[]` (≤ 200, **optional**, ROK-1931) | `{ worldUid, x, z, at }` | Deaths the mod recorded on the player's machine, newest first (order not enforced). `worldUid` int64 string = the world it happened on — the profile is portable, so entries from single-player or other servers appear; the server **stores only entries whose `worldUid` equals `character.worldUid`** and ignores the rest. `x`/`z` world metres, \|v\| ≤ 32 768 (same bound as map pins). `at` = ISO UTC instant of the death (the player's clock), ≤ 24 chars, **unique** within the message (the server's dedupe key) and **≤ `capturedAt`**. Strict entry. Omitted = no history sent (older mod); the server never deletes stored deaths that fall off the 200 cap. |
+| `deathCount` (int 0–1 000 000, **optional**, ROK-1931) | integer | Valheim's lifetime `Deaths` stat for the character — every world and single-player. Stored for reference; **not** the per-server death count (that is the stored rows). |
 
 Item stack (`item`): `prefab`; `stack` 1–100 000; `quality` 1–10 (1-based
 upgrade level); `variant` 0–63; `durability` and `maxDurability` — durability
@@ -260,10 +262,12 @@ the 1.0.x rule below. Station and station level are the same in both.
 amount(r, q), 0.221.x = q <= 1 ? r.amount : (q - 1) * r.amountPerLevel         // r = one resource
 amount(r, q), 1.0.x   = r.upgraderResource ? r.amount                            // upgrade item: every quality step
                       : q <= 1 ? r.amount : r.amountPerLevel * 2^(q - 2)         // ×1, ×2, ×4 for q = 2, 3, 4
+consumed(r, q), 0.221.x = amount(r, q)
+consumed(r, q), 1.0.x   = r.upgraderResource && q <= 1 ? 0 : amount(r, q)       // a fresh q1 craft takes no upgrade item
 stationLevel(R, q) = max(1, R.minStationLevel) + (q - 1)                       // R = the recipe
 station(R, q)      = R.station ?? (q > 1 ? R.repairStation : null)
-craft to quality Q from scratch  = Σ_{q=1..Q}  amount(r, q)  per resource, one step per q (station(R,q) at stationLevel(R,q))
-upgrade q0 → Q                   = Σ_{q=q0+1..Q} amount(r, q)
+craft to quality Q from scratch  = Σ_{q=1..Q}  consumed(r, q)  per resource, one step per q (station(R,q) at stationLevel(R,q))
+upgrade q0 → Q                   = Σ_{q=q0+1..Q} consumed(r, q)
 items produced per craft         = R.amount at q = 1; 1 per upgrade step
 smelter fuel                     = fuelPerProduct × outputs (when fuel ≠ null); cooking fuel = estimate only (burns per second lit)
 ```
@@ -272,8 +276,21 @@ For q ≤ 3 the two `amount` rules agree for ordinary resources. Vanilla 1.0.20
 has no quality above 4 and every upgrade item there is `amount 1,
 amountPerLevel 0`, so the 1.0.x rule beyond q4, or for other upgrade-item
 amounts, is extrapolated (`formula: "custom"` flags any recipe whose live
-values differ). Whether a fresh q1 craft consumes the upgrade item is
-**UNVERIFIED in game**: `GetAmount(1)` returns its amount, and the planner follows it.
+values differ). `amount(r, q)` mirrors the live `GetAmount(q)` (which reports
+an upgrade item's `amount` at q1 too), so the mod's `formula` check stays
+aligned with it. What the planner charges is `consumed(r, q)`: a fresh q1
+craft does **not** take the upgrade item (operator in-game check 2026-10-25 on
+1.0.20 — an Iron mace crafts without its Iron battle idol), so upgrade items
+are charged only on the q ≥ 2 steps.
+
+**Planner step view** (ROK-1861, Raid Ledger side; no wire change). A planned
+recipe spanning two or more quality steps lists each step `q` with
+`station(R, q)` at `stationLevel(R, q)` and its `consumed(r, q)` resources;
+the steps sum to the node's totals. A step whose station carries `upgrader`
+(1.0.20) is shown as an upgrade station, and that station's own `pieces[]`
+build cost is listed once, informational only — never netted against stock
+and never added to the shopping list. While spoiler protection is on, an
+upgrade station nobody on the server has discovered is never named.
 
 `maxQuality` comes from the `items` catalogue. `formula: "custom"` makes the
 web say "upgrade cost may differ in game". For `anyOneOf` recipes the
@@ -303,8 +320,8 @@ disappears — there are no deltas. Prefabs are an open set: vanilla
 | `omitted` | int | portals the mod dropped above 4 096 |
 
 Message-level rule (§6): (`prefab`, `x`, `y`, `z`) is unique across `portals`.
-Until the ingest story (ROK-1946) lands, the server validates a `portals`
-message and answers 202 `accepted` **without storing it**.
+The server stores it (ROK-1946); the latest scan replaces the world's
+portals, and an older or equal `capturedAt` is skipped as stale.
 
 ## 6. Strict keys and refinements
 
@@ -326,6 +343,7 @@ rules are enforced by the Zod schema but **cannot be expressed in
   `stations[].prefab`, `processes[].processor` to `processors[].prefab`;
   Σ recipe + piece resources + process inputs ≤ `VALHEIM_LINK_RECIPE_ENTRIES_MAX`.
 - `portals`: (`prefab`, `x`, `y`, `z`) unique across `portals[]`.
+- `character.deaths[]`: `at` unique, and no `at` later than `capturedAt`.
 
 **Server-enforced (not in Zod, not in `schema.json`).** The contract package
 stays synchronous and browser-safe, so it never inflates. The ingest endpoint
@@ -355,7 +373,7 @@ all pass Zod.
 
 | Constant | Value | Applies to | Typical |
 |---|---|---|---|
-| `VALHEIM_LINK_CHARACTER_MAX_BYTES` | 2 097 152 (2 MiB) | one `character` body | 10–40 KB. Largest schema-valid ≈ 1.87 MB |
+| `VALHEIM_LINK_CHARACTER_MAX_BYTES` | 2 097 152 (2 MiB) | one `character` body | 10–40 KB. Largest schema-valid ≈ 1.89 MB (≈ 1.87 MB plus ≈ 23 KB for 200 `deaths[]` entries, ROK-1931) |
 | `VALHEIM_LINK_MAP_MAX_BYTES` | 8 388 608 (8 MiB) | one `map` body | tens to a few hundred KB (UNVERIFIED). Largest schema-valid (two 3 M-char layers, 2 000 pins) ≈ 7.03 MB |
 | `VALHEIM_LINK_BITMAP_DATA_MAX_CHARS` | 3 000 000 | one bitmap's `data` | a 2048² mask is 512 KiB raw before gzip; ≤ ~700 KB base64 even if incompressible |
 | `VALHEIM_LINK_BITMAP_EDGE_MAX` | 4096 | `textureSize`, bitmap edges | 2048 vanilla |
@@ -380,7 +398,7 @@ when one no longer fits its cap (ROK-1855) — add the new field to its builder.
 
 All values are synthetic: SteamID64s `765611980000000xx`, invented names
 (`Testviking`, `Fixtureheim`), no seeds, no real world names.
-Valid: `character-*` (2), `map-*` (2), `items-*` (2), `containers-*` (2),
+Valid: `character-*` (3: `character-vanilla`, `character-eaqs`, `character-deaths`), `map-*` (2), `items-*` (2), `containers-*` (2),
 `recipes-vanilla`, `recipes-processing`, `portals-vanilla` and `portals-modded`; invalid cases per kind live under `invalid/`.
 
 - `fixtures/<name>.json` — a message that **must parse**. Map bitmaps must
