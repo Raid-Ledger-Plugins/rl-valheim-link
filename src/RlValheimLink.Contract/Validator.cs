@@ -91,7 +91,7 @@ namespace RlValheimLink.Contract
             Str(o, "serverId", "", issues, 0, null, ServerId);
             if (Str(o, "capturedAt", "", issues, 1, null, null, out string ts))
             {
-                if (!IsoDateTime.IsMatch(ts)) issues.Add(new ValidationIssue("capturedAt", "invalid_format", "ISO-8601 UTC with Z"));
+                if (!IsoDateTime.IsMatch(ts) || !TryParseInstant(ts, out _)) issues.Add(new ValidationIssue("capturedAt", "invalid_format", "ISO-8601 UTC with Z"));
                 if (ts.Length > Caps.TimestampMaxChars) issues.Add(new ValidationIssue("capturedAt", "too_big", "at most 3 fractional digits"));
             }
             Str(o, "gameVersion", "", issues, 0, null, GameVersion);
@@ -223,7 +223,8 @@ namespace RlValheimLink.Contract
             if (o["deaths"] == null) return;
             if (!Arr(o, "deaths", "", issues, 0, Caps.DeathsMax, out JArray deaths)) return;
             bool capturedOk = o["capturedAt"] is JValue cv && cv.Type == JTokenType.String && MessageJson.TryParseTimestamp((string)cv, out _);
-            DateTime captured = capturedOk ? ParseInstant((string)o["capturedAt"]) : DateTime.MaxValue;
+            DateTime captured = DateTime.MaxValue;
+            capturedOk = capturedOk && TryParseInstant((string)o["capturedAt"], out captured);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < deaths.Count; i++)
             {
@@ -234,25 +235,32 @@ namespace RlValheimLink.Contract
                 Num(d, "x", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
                 Num(d, "z", p, issues, -Caps.WorldCoordMax, Caps.WorldCoordMax);
                 if (!Str(d, "at", p, issues, 1, null, null, out string at)) continue;
-                bool fmt = IsoDateTime.IsMatch(at);
+                // A regex-shaped but calendar-invalid value (Feb 30, 25:00) is invalid_format too, like Zod's iso.datetime.
+                DateTime atInstant = default;
+                bool fmt = IsoDateTime.IsMatch(at) && TryParseInstant(at, out atInstant);
                 if (!fmt) issues.Add(new ValidationIssue(p + ".at", "invalid_format", "ISO-8601 UTC with Z"));
                 if (at.Length > Caps.TimestampMaxChars) issues.Add(new ValidationIssue(p + ".at", "too_big", "at most 3 fractional digits"));
                 if (!seen.Add(at)) issues.Add(new ValidationIssue(p, "custom", "duplicate deaths entry"));
-                if (fmt && capturedOk && ParseInstant(at) > captured) issues.Add(new ValidationIssue(p + ".at", "custom", "death is after capturedAt"));
+                if (fmt && capturedOk && atInstant > captured) issues.Add(new ValidationIssue(p + ".at", "custom", "death is after capturedAt"));
             }
         }
 
-        /// <summary>An IsoDateTime-shaped string as a UTC instant, millisecond precision like Date.parse (extra digits truncated).</summary>
-        private static DateTime ParseInstant(string iso)
+        /// <summary>
+        /// An IsoDateTime-shaped string as a UTC instant, millisecond precision like Date.parse (extra digits truncated).
+        /// False (never a throw) when the shape matches but the date or time does not exist.
+        /// </summary>
+        private static bool TryParseInstant(string iso, out DateTime t)
         {
+            t = default;
+            if (!IsoDateTime.IsMatch(iso)) return false;
             string s = iso.Substring(0, iso.Length - 1);
             int dot = s.IndexOf('.');
             string frac = dot < 0 ? "" : s.Substring(dot + 1);
             if (dot >= 0) s = s.Substring(0, dot);
             if (s.Length == 16) s += ":00";
-            var t = DateTime.ParseExact(s, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+            if (!DateTime.TryParseExact(s, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out t)) return false;
             if (frac.Length > 0) t = t.AddMilliseconds(int.Parse((frac + "00").Substring(0, 3), CultureInfo.InvariantCulture));
-            return t;
+            return true;
         }
 
         private static void ItemStack(JObject item, string path, List<ValidationIssue> issues)

@@ -42,6 +42,25 @@ public class DeathsValidatorTests
         Assert.Contains(Validator.Validate(msg), i => i.Path == "deaths.1.at" && i.Code == "custom");
     }
 
+    [Theory]
+    [InlineData("2026-02-30T00:00:00Z")]
+    [InlineData("2026-10-17T25:00:00Z")]
+    [InlineData("2026-13-01T00:00Z")]
+    public void A_regex_shaped_at_that_is_not_a_real_instant_is_invalid_format_not_a_throw(string at)
+    {
+        var msg = Fixture();
+        Deaths(msg)[0]["at"] = at;
+        Assert.Contains(Validator.Validate(msg), i => i.Path == "deaths.0.at" && i.Code == "invalid_format");
+    }
+
+    [Fact]
+    public void A_regex_shaped_capturedAt_that_is_not_a_real_instant_is_invalid_format()
+    {
+        var msg = Fixture();
+        msg["capturedAt"] = "2026-02-30T20:15:00Z";
+        Assert.Contains(Validator.Validate(msg), i => i.Path == "capturedAt" && i.Code == "invalid_format");
+    }
+
     [Fact]
     public void Uniqueness_is_by_exact_string_like_zod()
     {

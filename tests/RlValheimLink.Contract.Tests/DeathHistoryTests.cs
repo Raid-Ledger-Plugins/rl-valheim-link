@@ -43,6 +43,20 @@ public class DeathHistoryTests
     }
 
     [Fact]
+    public void Record_into_a_full_history_of_a_death_older_than_every_entry_is_not_kept()
+    {
+        var list = new List<DeathRecord>();
+        for (int i = 0; i < Caps.DeathsMax; i++) DeathHistory.Record(list, "1", i, 0, T0.AddMinutes(i));
+        var newest = DeathHistory.Record(list, "1", 0, 0, T0.AddDays(1));
+        Assert.True(DeathHistory.Holds(list, newest));
+        var before = list.ConvertAll(d => d.At);
+        var old = DeathHistory.Record(list, "1", 0, 0, T0.AddDays(-1)); // clock behind every stored stamp
+        Assert.NotNull(old);
+        Assert.False(DeathHistory.Holds(list, old)); // DeathRecorder logs "death not kept" on this
+        Assert.Equal(before, list.ConvertAll(d => d.At));
+    }
+
+    [Fact]
     public void Record_ignores_a_world_uid_that_is_not_an_int64()
     {
         var list = new List<DeathRecord>();

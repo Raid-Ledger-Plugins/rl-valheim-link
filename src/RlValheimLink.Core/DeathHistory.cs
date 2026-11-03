@@ -20,7 +20,11 @@ namespace RlValheimLink.Core
 
         private static readonly Regex Int64 = new Regex(@"^(0|-?[1-9]\d{0,18})\z", RegexOptions.CultureInvariant);
 
-        /// <summary>Adds a death at <paramref name="nowUtc"/>; returns it, or null when the world uid is unusable.</summary>
+        /// <summary>
+        /// Adds a death at <paramref name="nowUtc"/>; returns it, or null when the world uid is unusable. With a full
+        /// history the new record can itself be the one trimmed (stamped earlier than every stored entry, e.g. a clock
+        /// that went backwards): it is still returned, and <see cref="Holds"/> says it was not kept.
+        /// </summary>
         public static DeathRecord Record(List<DeathRecord> list, string worldUid, double x, double z, DateTime nowUtc)
         {
             if (worldUid == null || !Int64.IsMatch(worldUid) || !long.TryParse(worldUid, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)) return null;
@@ -34,6 +38,9 @@ namespace RlValheimLink.Core
             if (list.Count > Caps.DeathsMax) list.RemoveRange(Caps.DeathsMax, list.Count - Caps.DeathsMax);
             return rec;
         }
+
+        /// <summary>True when <paramref name="rec"/> (as returned by <see cref="Record"/>) is still in the history.</summary>
+        public static bool Holds(List<DeathRecord> list, DeathRecord rec) => rec != null && list != null && list.Contains(rec);
 
         /// <summary>
         /// What a character message carries: entries with a valid shape, `at` ≤ capturedAt (a later one waits for the

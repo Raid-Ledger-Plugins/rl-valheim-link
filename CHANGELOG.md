@@ -9,6 +9,12 @@ after production has the Raid Ledger change; an older server rejects the whole c
 every object in the contract is strict). A player with no recorded deaths omits the new fields and is
 unaffected.
 
+**Update order: Raid Ledger first, then the game server, then (or with) the clients.** A Raid Ledger
+server without ROK-1931 rejects **every** character upload from a 0.5.0 client that has recorded deaths
+(`400 schema_invalid` on the unknown `deaths`/`deathCount` keys), and so does a game server still on 0.4.x
+(its strict pre-send validator drops the upload). Nothing flags the mismatch earlier, because `modVersion`
+is not matched by default. Those players' character data stops updating until the server side is on 0.5.0.
+
 - The client records each death of the local player: a Harmony prefix and postfix on `Player.OnDeath`
   (the prefix decides "local player") store the position and time in `Player.m_customData`
   (`RlValheimLink.deaths`), newest first, capped at 200, so the history travels with the character

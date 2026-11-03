@@ -23,8 +23,10 @@ namespace RlValheimLink.Client
                 data.TryGetValue(DeathHistory.CustomDataKey, out string stored);
                 var list = DeathHistory.Parse(stored);
                 var pos = p.transform.position;
-                if (DeathHistory.Record(list, GameInfo.WorldUid(), pos.x, pos.z, DateTime.UtcNow) == null)
-                { Log.Warn("death not recorded: no usable world uid"); return; }
+                var rec = DeathHistory.Record(list, GameInfo.WorldUid(), pos.x, pos.z, DateTime.UtcNow);
+                if (rec == null) { Log.Warn("death not recorded: no usable world uid"); return; }
+                if (!DeathHistory.Holds(list, rec))
+                { Log.Warn($"death not kept: the history is full ({Caps.DeathsMax}) and this death ({rec.At}) is older than every stored one (PC clock behind?)"); return; }
                 data[DeathHistory.CustomDataKey] = DeathHistory.Serialize(list);
                 Log.Info($"death recorded ({list.Count} in this character's history, cap {Caps.DeathsMax})");
             }

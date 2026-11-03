@@ -287,7 +287,9 @@ by default listed in `adminlist.txt`). Other players can stay on older versions.
 
 ## J. Death history (0.5.0; server and client, needs a Raid Ledger server with ROK-1931)
 
-Install 0.5.0 on the **server and your client**. Do this only after production Raid Ledger has ROK-1931.
+Install 0.5.0 on the **server and your client**. Do this only after production Raid Ledger has ROK-1931,
+and update the game server before (or with) the clients: a Raid Ledger server without ROK-1931, or a game
+server still on 0.4.x, drops every character upload from a 0.5.0 client that has recorded deaths.
 This is spec AC12 (OPERATOR step, real device).
 
 30. **Die once** in game (`Client.OptOut = false`). Client log:
