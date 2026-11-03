@@ -77,6 +77,14 @@ namespace RlValheimLink.Core
             }
             r.CapturedAt = capturedAt;
 
+            // deaths[].at is the player's clock and must not be after capturedAt (CONTRACT §6): when capturedAt was
+            // clamped above, the latest deaths wait for a later capture instead of sinking the whole upload.
+            if (kind == "character" && msg["deaths"] is JArray deaths)
+            {
+                int held = DeathHistory.DropAfter(deaths, capturedAt);
+                if (held > 0) r.Notes.Add($"{held} death(s) after capturedAt held back (client clock ahead)");
+            }
+
             if (kind == "character" || kind == "map")
             {
                 var ch = msg["character"] as JObject;
