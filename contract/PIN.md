@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Pinned from commit | `a87735b5ff4d1ed73373521de85ef703605c0e71` (pinned from feat/rok-1931-death-history a87735b5f, 2026-11-03 — pre-merge; re-pin from RL main after the RL PR merges) |
+| Pinned from commit | `9c2165c9c0b7b184b1acb6fdeea67b866b625202` (main, 2026-11-03) |
 | Upstream URL | https://raw.githubusercontent.com/sjdodge123/Raid-Ledger/main/packages/contract/valheim-link/v1/ |
 | Drift check | `tools/contract-check/drift-check.sh` (CI job `contract-drift`) |
 
