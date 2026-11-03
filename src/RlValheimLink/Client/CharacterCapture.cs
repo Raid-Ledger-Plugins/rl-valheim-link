@@ -35,6 +35,9 @@ namespace RlValheimLink.Client
             var known = KnownNameLookup.Current();
             m.KnownItems = Known(GameAccess.KnownMaterial(p), known.Items, "knownItems");
             m.KnownRecipes = Known(GameAccess.KnownRecipes(p), known.Recipes, "knownRecipes");
+            // ROK-1931 (CONTRACT §3): recorded deaths at or before capturedAt, and the lifetime stat when the game has one.
+            m.Deaths = DeathRecorder.ForMessage(p, m.CapturedAt);
+            m.DeathCount = DeathRecorder.DeathCount();
             return m;
         }
 

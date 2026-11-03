@@ -58,6 +58,13 @@ namespace RlValheimLink
         [HarmonyPatch(typeof(Game), nameof(Game.SavePlayerProfile)), HarmonyPostfix]
         private static void Game_SavePlayerProfile_Postfix(bool setLogoutPoint) => ClientHalf.OnProfileSaved(setLogoutPoint);
 
+        // ROK-1931: the death history. The prefix decides "local player" before the body runs (it may tear state down).
+        [HarmonyPatch(typeof(Player), nameof(Player.OnDeath)), HarmonyPrefix]
+        private static void Player_OnDeath_Prefix(Player __instance, out bool __state) => __state = __instance != null && __instance == Player.m_localPlayer;
+
+        [HarmonyPatch(typeof(Player), nameof(Player.OnDeath)), HarmonyPostfix]
+        private static void Player_OnDeath_Postfix(Player __instance, bool __state) { if (__state) DeathRecorder.OnLocalDeath(__instance); }
+
         [HarmonyPatch(typeof(Terminal), nameof(Terminal.InitTerminal)), HarmonyPostfix]
         private static void Terminal_InitTerminal_Postfix() => ConsoleCommands.Register();
     }

@@ -245,6 +245,20 @@ namespace RlValheimLink
         }
 
         /// <summary>Touch every accessor so a missing or retyped field surfaces at startup as one log line, not mid-capture.</summary>
+        /// <summary>
+        /// ROK-1931: <c>PlayerProfile.GetStat(PlayerStatType)</c>, resolved by name so a game build without it (the
+        /// older unpublicized refs lack it) yields null — <c>deathCount</c> is then omitted (spec Q3) instead of a
+        /// MissingMethodException sinking the whole character capture.
+        /// </summary>
+        private static readonly System.Reflection.MethodInfo GetStat = AccessTools.Method(typeof(PlayerProfile), "GetStat", new[] { typeof(PlayerStatType) });
+
+        public static float? DeathsStat(PlayerProfile profile)
+        {
+            if (profile == null || GetStat == null) return null;
+            try { return System.Convert.ToSingle(GetStat.Invoke(profile, new object[] { PlayerStatType.Deaths }), System.Globalization.CultureInfo.InvariantCulture); }
+            catch (System.Exception) { return null; }
+        }
+
         public static string SelfCheck()
         {
             try

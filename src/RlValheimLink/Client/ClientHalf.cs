@@ -84,7 +84,7 @@ namespace RlValheimLink.Client
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     var msg = CharacterCapture.Capture(p);
-                    if (Dispatch(msg, PayloadKind.Character, $"character (equipment={msg.Equipment.Count} items={msg.Inventory.Items.Count} grid={msg.Inventory.Grid.Width}x{msg.Inventory.Grid.Height} skills={msg.Skills.Count} trophies={msg.Trophies.Count} knownItems={msg.KnownItems.Count} knownRecipes={msg.KnownRecipes.Count}) captured in {sw.ElapsedMilliseconds} ms"))
+                    if (Dispatch(msg, PayloadKind.Character, $"character (equipment={msg.Equipment.Count} items={msg.Inventory.Items.Count} grid={msg.Inventory.Grid.Width}x{msg.Inventory.Grid.Height} skills={msg.Skills.Count} trophies={msg.Trophies.Count} knownItems={msg.KnownItems.Count} knownRecipes={msg.KnownRecipes.Count} deaths={msg.Deaths?.Count ?? 0} deathCount={(msg.DeathCount.HasValue ? msg.DeathCount.Value.ToString() : "none")}) captured in {sw.ElapsedMilliseconds} ms"))
                         _lastCharacter = now;
                 }
             }
