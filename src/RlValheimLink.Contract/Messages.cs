@@ -28,6 +28,20 @@ namespace RlValheimLink.Contract
         [JsonProperty("trophies", Order = 14)] public List<string> Trophies { get; set; } = new List<string>();
         [JsonProperty("knownItems", Order = 15)] public List<string> KnownItems { get; set; } = new List<string>();
         [JsonProperty("knownRecipes", Order = 16)] public List<string> KnownRecipes { get; set; } = new List<string>();
+        /// <summary>Recorded deaths, newest first (CONTRACT.md §3, ROK-1931). Optional: null = omitted (older shape).</summary>
+        [JsonProperty("deaths", Order = 17, NullValueHandling = NullValueHandling.Ignore)] public List<DeathRecord> Deaths { get; set; }
+        /// <summary>Valheim's lifetime Deaths stat (every world). Optional: null = omitted (no stat on this game build).</summary>
+        [JsonProperty("deathCount", Order = 18, NullValueHandling = NullValueHandling.Ignore)] public int? DeathCount { get; set; }
+    }
+
+    /// <summary>One death the mod recorded on the player's machine (CONTRACT.md §3 `deaths[]`).</summary>
+    public sealed class DeathRecord
+    {
+        [JsonProperty("worldUid", Order = 0)] public string WorldUid { get; set; }
+        [JsonProperty("x", Order = 1)] public double X { get; set; }
+        [JsonProperty("z", Order = 2)] public double Z { get; set; }
+        /// <summary>ISO UTC, second precision (<see cref="MessageJson.Timestamp"/>); unique per message, ≤ capturedAt.</summary>
+        [JsonProperty("at", Order = 3)] public string At { get; set; }
     }
 
     public sealed class CharacterIdentity

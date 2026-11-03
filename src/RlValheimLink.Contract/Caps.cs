@@ -46,6 +46,8 @@ namespace RlValheimLink.Contract
         public const int StationLevelMax = 20;
         public const int PortalsMax = 4096;
         public const int PortalTagMaxChars = 64;
+        public const int DeathsMax = 200;
+        public const int DeathCountMax = 1_000_000;
 
         public const int TimestampMaxChars = 24;
         public const int WorldCoordMax = 32_768;
