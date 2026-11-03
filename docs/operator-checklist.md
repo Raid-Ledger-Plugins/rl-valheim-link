@@ -283,3 +283,22 @@ by default listed in `adminlist.txt`). Other players can stay on older versions.
 29. **Problems to paste back:** `RLVL: peer <uid>: piece icons rejected: …`,
     `… piece icons reference atlas <12 hex>… which never arrived; dropped`, `… piece icons dropped, Server.ItemsExportBy does not allow this client`,
     and on the client `RLVL: server rejected a transfer: pieceIcons: …` or `piece icon export: no atlas could be built; nothing sent`.
+
+
+## J. Death history (0.5.0; server and client, needs a Raid Ledger server with ROK-1931)
+
+Install 0.5.0 on the **server and your client**. Do this only after production Raid Ledger has ROK-1931.
+This is spec AC12 (OPERATOR step, real device).
+
+30. **Die once** in game (`Client.OptOut = false`). Client log:
+    `RLVL: death recorded (N in this character's history…)`.
+31. **Respawn, then save or log out.** The character capture line shows `deaths=N deathCount=M`
+    (`deathCount=none` means the game build has no Deaths stat; say so if you see it). The upload
+    is `POST character … 202 accepted`.
+32. **Relog** and trigger another capture (`rlvl export now`): `deaths=N` still shows the same count, so
+    the history survived the respawn and the save. (UNVERIFIED in design §2: the dying Player's
+    `m_customData` is saved before the respawn destroys it.)
+33. **Raid Ledger:** the character's death history lists the death with its position and time, newest first.
+34. **Opt-out:** with `[Client] OptOut = true` a death logs no `death recorded` line and sends nothing.
+35. **Problems to paste back whole:** any `400 schema_invalid […]` on `character` (an older Raid Ledger
+    server rejects the whole upload), and `deaths=` vs `deathCount=` values that disagree by a lot.

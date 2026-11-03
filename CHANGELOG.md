@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0 — 2026-11-03
+
+**Death history** (Raid Ledger ROK-1931). Needs 0.5.0 on the **server and on every client**: the server's
+enricher now holds back deaths stamped after a server-replaced `capturedAt`, so a 0.4.x server would
+not protect a 0.5.0 client's upload. **Requires a Raid Ledger server with ROK-1931** (state: publish only
+after production has the Raid Ledger change; an older server rejects the whole character upload because
+every object in the contract is strict). A player with no recorded deaths omits the new fields and is
+unaffected.
+
+- The client records each death of the local player: a Harmony prefix and postfix on `Player.OnDeath`
+  (the prefix decides "local player") store the position and time in `Player.m_customData`
+  (`RlValheimLink.deaths`), newest first, capped at 200, so the history travels with the character
+  save. `Client.OptOut` is respected: nothing is recorded or sent.
+- `character.deaths[]` (position and time) and `character.deathCount` (the game's per-character Deaths
+  stat) ride along with every character capture. The Deaths stat is read by reflection
+  (`PlayerProfile.GetStat`); when the game build does not have it, `deathCount` is omitted.
+- The server's enricher drops `deaths[]` entries stamped after a `capturedAt` it replaced (client clock
+  more than 60 s ahead), so a skewed clock cannot make the whole upload fail validation.
+- Pre-send validator and mock receiver enforce the new rules (unique `at`, `at` <= `capturedAt`, 200 cap,
+  `deathCount` bounds). Contract pinned to the Raid Ledger ROK-1931 branch (additive, still v1; PIN.md
+  says pre-merge until Raid Ledger main has it).
+
 ## 0.4.2 — 2026-10-24
 
 **Client fix** (players get it through the modpack; the server needs nothing new).

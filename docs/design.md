@@ -84,6 +84,15 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   falling back to `ObjectDB.instance.GetItemPrefab(m_shared).name`.
   `extraRows`: every row `y ≥ 4` gets a purpose from the inventory mod that
   is loaded (see the EquipmentAndQuickSlots bullet below).
+- Deaths (0.5.0, ROK-1931): a Harmony prefix and postfix on `Player.OnDeath` (the prefix decides whether the
+  dying player is `Player.m_localPlayer`; other players are ignored) call `Client/DeathRecorder`, which
+  records position and time into `Player.m_customData["RlValheimLink.deaths"]` (newest first, cap 200,
+  `Core/DeathHistory`) and so is saved with the character. `Client.OptOut` is respected. `character.deaths[]`
+  is that history; `character.deathCount` is the Deaths stat read by reflection (`PlayerProfile.GetStat`
+  with `PlayerStatType.Deaths`, via `GameAccess.DeathsStat`; the method is absent from the unpublicized
+  refs) and is omitted when the member is absent. UNVERIFIED in game: that `m_customData` of the dying
+  Player is saved before the respawn destroys it, and that the stat is per character on 1.0.20
+  (operator-checklist section J).
 - Skills: `Skills.m_skillData` → `id = SkillType.ToString()`, `m_level`,
   `m_accumulator`.
 - Trophies / known: `Player.m_trophies`, `m_knownMaterial`, `m_knownRecipes`. Trophies hold drop-prefab
@@ -177,6 +186,10 @@ Raid Ledger server id and can never spoof identity:
 | `character.playerId` | must equal `ZDOMan.instance.GetZDO(peer.m_characterID).GetLong(ZDOVars.s_playerID)`; mismatch → rejected and logged |
 | `capturedAt` | client clock; **replaced by the server's clock when it differs by more than 60 s** (logged once per peer), so a skewed client never trips the contract's +5 min rule or pins "latest" wrongly |
 | `modVersion` | logged, not matched: the client and server must speak the same **RPC protocol** (`LinkChannel.Protocol`, carried in every chunk and in the hello); a different protocol → `RLVL_Control reject protocol`. `Server.RequireExactModVersion = true` restores strict equality for a test window |
+
+Deaths: `Enricher` also drops `character.deaths[]` entries stamped after a server-replaced `capturedAt`
+(client clock more than 60 s ahead), because the contract requires `at` <= `capturedAt` and one bad
+entry would reject the whole upload.
 
 Then the whole message runs through the **same validator** the client used,
 and only a clean message is serialised (`Formatting.None`, UTF-8, no BOM) —
