@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.6 — 2026-11-01
+
+**Server-only config change.** Clients and the modpack need nothing.
+
+- `[Server] ItemsExportBy` now defaults to `anyone` (was `admins`): a new game version's item catalogue
+  and piece icons arrive on the first join of any player with the mod, not only an admin's. The groups
+  this mod serves are small and do not forge item lists; `admins` and `nobody` remain available.
+- **One-time migration of existing config files.** BepInEx keeps a value already written to the file, so
+  on first start of 0.4.6 a file that still says `ItemsExportBy = admins` (the old default) is rewritten
+  to `anyone` and the log says so once (`RLVL: config: [Server] ItemsExportBy changed from admins …`).
+  `anyone` and `nobody` are left as they are. The new internal `[Server] ConfigRevision = 1` records that
+  this ran, so it never runs again: to keep admins only, set `ItemsExportBy = admins` after the upgrade
+  and it is kept.
+- No wire-format change.
+
+## 0.4.5 — 2026-11-01
+
+**Client fix** (Raid Ledger ROK-1881). Players update the mod for their own pins to be relabelled; the
+dedicated server needs nothing new.
+
+- Map pin labels on Raid Ledger's Map tab now read as they do in game. Names the game stores as translation
+  tokens (location, boss and enemy pins, `$hud_…`) are translated with the player's language before
+  sending, rich-text tags (`<color=…>`, `<b>`, `<size=…>`, `<sprite…>`, `<#ff0000>`) are removed while
+  other text in angle brackets (`<Home>`) is kept as the game shows it, line breaks and other control
+  characters become spaces and surrounding whitespace is trimmed; a label with nothing left is sent empty. The 64-character
+  cap is applied after that, never in the middle of an emoji.
+- Which pins count as shared (from a cartography table) is unchanged and now confirmed against the game
+  code: a pin is shared when another player wrote it to the table and you have not taken it as your own.
+- Pin types added by other mods (not in the game's list) are still sent as their number and shown with a
+  generic icon; each such number is logged once per session (`RLVL: pins: pin type <n> is outside …`).
+  Labels are never logged.
+- No wire-format change.
+
 ## 0.4.4 — 2026-11-01
 
 **Server-only feature** (Raid Ledger ROK-1945). Clients and the modpack need nothing.

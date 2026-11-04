@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using RlValheimLink.Contract;
+using RlValheimLink.Core;
 using UnityEngine;
 
 namespace RlValheimLink.Client
@@ -11,6 +12,9 @@ namespace RlValheimLink.Client
     {
         /// <summary>Pin types the game never saves; they are not part of a player's map.</summary>
         private static readonly HashSet<string> TransientPinTypes = new HashSet<string> { "None", "Player", "Ping", "Shout", "RandomEvent", "EventArea" };
+
+        /// <summary>Modded pin type values (outside the vanilla enum) already logged; each is logged once per session.</summary>
+        private static readonly HashSet<string> LoggedUnnamedTypes = new HashSet<string>();
 
         public sealed class Result
         {
@@ -56,6 +60,16 @@ namespace RlValheimLink.Client
             return new Result { Message = m, ContentHash = GameInfo.Sha256Hex(packedOwn, packedShared, Encoding.UTF8.GetBytes(pinText.ToString())) };
         }
 
+        /// <summary>
+        /// Vanilla names can be tokens (`$hud_…`, `$location_…`, `$enemy_…`) the game localises on display; resolve
+        /// them with the player's loaded language. Player free text without a token comes back unchanged.
+        /// </summary>
+        private static string Localized(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            try { return Localization.instance?.Localize(raw) ?? raw; } catch { return raw; }
+        }
+
         private static void Pins(Minimap mm, Player p, List<MapPin> list, StringBuilder hashText)
         {
             var pins = GameAccess.Pins(mm);
@@ -66,16 +80,19 @@ namespace RlValheimLink.Client
             foreach (var pin in pins)
             {
                 if (pin == null || !pin.m_save) continue;
-                string type = GameInfo.Identifier(pin.m_type.ToString(), 32);
+                string rawType = pin.m_type.ToString();
+                if (MapPins.IsUnnamedType(rawType) && LoggedUnnamedTypes.Add(rawType))
+                    Log.Info($"pins: pin type {rawType} is outside the vanilla Minimap.PinType enum (added by a mod); sent as \"{GameInfo.Identifier(rawType, 32)}\" (Raid Ledger shows a generic icon)");
+                string type = GameInfo.Identifier(rawType, 32);
                 if (type == null || TransientPinTypes.Contains(type)) continue;
                 var mp = new MapPin
                 {
                     Type = type,
-                    Label = GameInfo.Clip(pin.m_name ?? "", 64),
+                    Label = MapPins.Label(Localized(pin.m_name)),
                     X = GameInfo.Clamp(pin.m_pos.x, -Caps.WorldCoordMax, Caps.WorldCoordMax),
                     Z = GameInfo.Clamp(pin.m_pos.z, -Caps.WorldCoordMax, Caps.WorldCoordMax),
                     Checked = pin.m_checked,
-                    Shared = pin.m_ownerID != 0L, // UNVERIFIED: vanilla stamps cartography-table pins with their author's id
+                    Shared = MapPins.IsShared(pin.m_ownerID), // non-zero = another player's pin from a cartography table (0.221.4 IL; ROK-1881)
                 };
                 all.Add(mp);
                 dist.Add((pin.m_pos - here).sqrMagnitude);
