@@ -19,6 +19,7 @@ public class FixtureOutputTests
         yield return new object[] { "items-atlas.json", (Func<LinkMessage>)(() => SyntheticCaptures.ItemsAtlas(AtlasBytes())) };
         yield return new object[] { "items-file-icons.json", (Func<LinkMessage>)(() => SyntheticCaptures.ItemsFileIcons(AtlasBytes())) };
         yield return new object[] { "containers-scan.json", (Func<LinkMessage>)(() => ServerScans.ContainersScan()) };
+        yield return new object[] { "portals-scan.json", (Func<LinkMessage>)(() => ServerScans.PortalsScan()) };
         yield return new object[] { "recipes-server.json", (Func<LinkMessage>)(() => ServerScans.RecipesServer()) };
         yield return new object[] { "recipes-server-icons.json", (Func<LinkMessage>)(() => ServerScans.RecipesServerIcons(IconAtlasBytes())) };
     }
