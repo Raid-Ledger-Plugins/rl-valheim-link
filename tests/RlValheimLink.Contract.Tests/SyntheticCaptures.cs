@@ -111,7 +111,7 @@ public static class SyntheticCaptures
         var m = MapPersonal();
         const int size = 2048;
         m.SharedExplored = Bitset.Encode(ExploredCells(size, 420, 2), size, size);
-        m.Pins.Add(new MapPin { Type = "Icon3", Label = "Shared portal", X = 1200, Z = -800, Checked = false, Shared = true });
+        m.Pins.Add(new MapPin { Type = "Icon4", Label = "Shared portal", X = 1200, Z = -800, Checked = false, Shared = true });
         return m;
     }
 

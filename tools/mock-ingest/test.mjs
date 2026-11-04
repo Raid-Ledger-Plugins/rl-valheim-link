@@ -70,7 +70,7 @@ test('invalid fixtures: every one is a 400; Zod-only refinements carry their EXP
     // ajv keywords are not Zod codes, so only the refinements (code custom) compare {path, code}.
     if (expected[name].code === 'custom') assert.ok(body.issues?.some((i) => i.path === expected[name].path && i.code === 'custom'), `${name}: ${JSON.stringify(body)}`);
   }
-}));
+}, { messagesPerMinute: 10_000 })); // more invalid fixtures than the real 60/min bucket (ROK-1931 took it to 61)
 
 // Rejected with exactly these {path, code} issues on its kind route.
 async function rejects(base, msg, issues, label) {

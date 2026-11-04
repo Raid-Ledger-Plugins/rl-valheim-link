@@ -255,7 +255,7 @@ configure. Restart the server when convenient; every time below counts from the 
 ## I. Planner icons from an admin client (0.4.0; server and one admin client)
 
 Install 0.4.0 on the **server** and on **your client** (you must be allowed by `[Server] ItemsExportBy`:
-by default listed in `adminlist.txt`). Other players can stay on older versions.
+any client by default since 0.4.6; with `admins`, listed in `adminlist.txt`). Other players can stay on older versions.
 
 24. **Server start.** Section H's lines, and on the first 0.4.0 start the recipes export says
     `… icons: none (no admin client with the piece atlas yet); …`. Once a map is on file, later starts also log
@@ -283,3 +283,40 @@ by default listed in `adminlist.txt`). Other players can stay on older versions.
 29. **Problems to paste back:** `RLVL: peer <uid>: piece icons rejected: …`,
     `… piece icons reference atlas <12 hex>… which never arrived; dropped`, `… piece icons dropped, Server.ItemsExportBy does not allow this client`,
     and on the client `RLVL: server rejected a transfer: pieceIcons: …` or `piece icon export: no atlas could be built; nothing sent`.
+
+## J. Portals on the Raid Ledger map (0.4.4; server only)
+
+Install 0.4.4 on the **server** only. Nothing to configure (`[Portals] Enabled` defaults to `true`).
+
+30. **Start.** After the chest scan line of step 17:
+    `RLVL: portal scan on: every 10 min (Chests.IntervalMinutes), the first in 180 s; extra prefabs: none`.
+31. **First portal scan, ~3 min after start (a minute after the first chest scan):**
+    `RLVL: portal scan: <n> portal prefabs: <list>`. UNVERIFIED until this line: expect `portal_stone,portal_wood`
+    plus AdvancedPortals' Ancient / Obsidian / Black Marble portals on the GamerSaloon server (their exact names
+    come from this line). Then `RLVL: portal scan 1: <p> portals (<t> tagged), <d> duplicates removed, <c> tags clipped to 64, <i> without a usable prefab, <o> omitted; <ms> ms over <k> ticks (busiest <ms> ms); portals|<world uid> capturedAt=<time> <bytes> bytes → Accepted`
+    and `RLVL: POST portals portals|<world uid> → 202 accepted in <ms> ms`. `<p>` should match the portals you
+    know of; `<t>` the ones with a name (XPortal names should count if XPortal writes the vanilla tag, as observed in the server log; unverified, confirm here).
+32. **Raid Ledger:** the map shows the portals with their tags; destroy or rename one, and after the next scan
+    (≤ 10 min) the map follows.
+33. **Problems to paste back:** `RLVL: portal scan aborted …`, `RLVL: portal scan <n>: portals message NOT sent …`,
+    `RLVL: portal scan: 0 portal prefabs found …`, `RLVL: portal scan: [Portals] ExtraPrefabs not found …`, or a POST that is not `202 accepted`.
+
+## K. Death history (0.5.0; server and client, needs a Raid Ledger server with ROK-1931)
+
+Install 0.5.0 on the **server and your client**. Do this only after production Raid Ledger has ROK-1931,
+and update the game server before (or with) the clients: a Raid Ledger server without ROK-1931, or a game
+server still on 0.4.x, drops every character upload from a 0.5.0 client that has recorded deaths.
+This is spec AC12 (OPERATOR step, real device).
+
+34. **Die once** in game (`Client.OptOut = false`). Client log:
+    `RLVL: death recorded (N in this character's history…)`.
+35. **Respawn, then save or log out.** The character capture line shows `deaths=N deathCount=M`
+    (`deathCount=none` means the game build has no Deaths stat; say so if you see it). The upload
+    is `POST character … 202 accepted`.
+36. **Relog** and trigger another capture (`rlvl export now`): `deaths=N` still shows the same count, so
+    the history survived the respawn and the save. (UNVERIFIED in design §2: the dying Player's
+    `m_customData` is saved before the respawn destroys it.)
+37. **Raid Ledger:** the character's death history lists the death with its position and time, newest first.
+38. **Opt-out:** with `[Client] OptOut = true` a death logs no `death recorded` line and sends nothing.
+39. **Problems to paste back whole:** any `400 schema_invalid […]` on `character` (an older Raid Ledger
+    server rejects the whole upload), and `deaths=` vs `deathCount=` values that disagree by a lot.

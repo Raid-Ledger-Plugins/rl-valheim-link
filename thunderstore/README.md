@@ -32,10 +32,10 @@ leaves your PC except through the game server you are playing on.
 3. Restart the server. The log (`BepInEx/LogOutput.log`) shows
    `RLVL: server half active: … token=set` and, a few seconds later, `RLVL: PUT blob … → 201 stored`
    for the world's base map.
-4. **Item catalogue:** the export is produced by an **admin's client** (a SteamID64 listed in the
-   server's `adminlist.txt`, `Steam_7656…` format), once per game version and again when the server's
-   mod set changes. The server asks the first admin who joins; nothing else is needed. To let any player
-   do it, set `[Server] ItemsExportBy = anyone`.
+4. **Item catalogue:** the export is produced by a **player's client** with the mod, once per game
+   version and again when the server's mod set changes. The server asks the first player who joins;
+   nothing else is needed. To limit it to admins (SteamID64s listed in the server's `adminlist.txt`,
+   `Steam_7656…` format), set `[Server] ItemsExportBy = admins`.
 5. **Test world on the same server:** if you sometimes boot this server into another world (a test
    world, an event world), set `[Server] WorldAllowlist` to your production world's name, e.g.
    `WorldAllowlist = Midgard` (several: comma-separated; case does not matter). On any other world the
@@ -61,8 +61,12 @@ leaves your PC except through the game server you are playing on.
   unaffected. `[Chests] Enabled = false` / `[Recipes] Enabled = false` switch them off;
   `[Chests] IntervalMinutes` (5–120) sets the scan interval. The 0.2.1 chest diagnostic is now off
   (`[Chests] DiagnosticDump`).
+- **Portals (0.4.4+, dedicated server only, on by default):** on the chest scan's grid the server finds
+  every portal in the world (vanilla, AdvancedPortals; XPortal names expected, unverified) and sends their positions and tags
+  (`RLVL: portal scan <n>: … → Accepted`), so they show on the Raid Ledger map. `[Portals] Enabled = false`
+  switches it off; `[Portals] ExtraPrefabs` adds a modded portal the scan does not recognise.
 - **Planner icons (0.4.0+):** the server cannot draw the icons of build pieces and crafting stations, so
-  it asks the first admin with the 0.4.0 client (`[Server] ItemsExportBy`) to render them once per game
+  it asks the first player with the 0.4.0+ client allowed by `[Server] ItemsExportBy` (anyone by default) to render them once per game
   version and server mod set, then re-sends the recipes with icons. `rlvl export icons` in the F5 console
   forces it. Without a 0.4.0 admin client the Planner works, just without those icons.
 - `rlvl status` in a client's F5 console (launch option `-console`) prints what the mod is doing.

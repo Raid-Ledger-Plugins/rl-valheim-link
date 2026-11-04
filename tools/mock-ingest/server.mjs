@@ -78,6 +78,12 @@ export function refineCharacter(msg) {
   if (!bad && grid.extraRows.length !== Math.max(0, grid.height - VANILLA_ROWS)) issues.push(custom('inventory.grid.extraRows'));
   unique(msg.equipment, (e) => e.slot, (i) => `equipment.${i}`, issues);
   unique(msg.skills, (s) => s.id, (i) => `skills.${i}`, issues);
+  // ROK-1931: deaths[] (optional) — worldUid in int64 range, at unique, at ≤ capturedAt (instant compare, like Zod's Date.parse).
+  const deaths = msg.deaths ?? [];
+  deaths.forEach((d, i) => int64(d.worldUid, `deaths.${i}.worldUid`, issues));
+  unique(deaths, (d) => d.at, (i) => `deaths.${i}`, issues);
+  const captured = Date.parse(msg.capturedAt);
+  deaths.forEach((d, i) => { if (Date.parse(d.at) > captured) issues.push(custom(`deaths.${i}.at`)); });
   return issues;
 }
 

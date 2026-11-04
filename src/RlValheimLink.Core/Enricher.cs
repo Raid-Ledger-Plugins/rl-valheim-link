@@ -77,6 +77,14 @@ namespace RlValheimLink.Core
             }
             r.CapturedAt = capturedAt;
 
+            // deaths[].at is the player's clock and must not be after capturedAt (CONTRACT §6): when capturedAt was
+            // clamped above, the latest deaths wait for a later capture instead of sinking the whole upload.
+            if (kind == "character" && msg["deaths"] is JArray deaths)
+            {
+                int held = DeathHistory.DropAfter(deaths, capturedAt);
+                if (held > 0) r.Notes.Add($"{held} death(s) after capturedAt held back (client clock ahead)");
+            }
+
             if (kind == "character" || kind == "map")
             {
                 var ch = msg["character"] as JObject;
@@ -115,7 +123,7 @@ namespace RlValheimLink.Core
             }
             else
             {
-                r.Key = $"items|{(string)(msg["gameVersion"] as JValue)}";
+                r.Key = Spool.ItemsKey((string)(msg["gameVersion"] as JValue));
             }
 
             var issues = Validator.Validate(msg);
@@ -131,15 +139,16 @@ namespace RlValheimLink.Core
         }
 
         /// <summary>
-        /// A message the server built itself (`containers`, `recipes`): there is no sending peer to check, so
-        /// the server sets serverId, validates and serialises; the snapshot key is (kind, world) for
-        /// containers and (kind, game version) for recipes (CONTRACT.md §5a, §5b).
+        /// A message the server built itself (`containers`, `recipes`, `portals`): there is no sending peer to
+        /// check, so the server sets serverId, validates and serialises; the snapshot key is (kind, world) for
+        /// containers and portals and (kind, game version) for recipes (CONTRACT.md §5a, §5b, §5c).
         /// </summary>
         public static EnrichResult Seal(LinkMessage message, string serverId)
         {
             var r = new EnrichResult { Kind = message?.Kind };
             if (message is ContainersMessage c) r.Key = ContainersBuilder.SpoolKey(c.WorldUid);
             else if (message is RecipesMessage) r.Key = RecipesBuilder.SpoolKey(message.GameVersion);
+            else if (message is PortalsMessage pm) r.Key = PortalsBuilder.SpoolKey(pm.WorldUid);
             else { r.Reason = "not a server-built kind"; return r; }
             message.ServerId = serverId ?? "";
             r.CapturedAt = message.CapturedAt;

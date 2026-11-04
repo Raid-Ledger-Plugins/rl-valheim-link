@@ -85,4 +85,24 @@ public class EnricherTests
         var r = Enricher.Enrich(o, Ctx());
         Assert.False(r.Ok); Assert.Contains("equipment.0.slot", r.Reason);
     }
+
+    [Fact]
+    public void A_fast_client_clock_keeps_the_upload_valid_by_holding_back_deaths_after_the_server_capturedAt()
+    {
+        // Client clock 1 h ahead: the server replaces capturedAt, so a death stamped on the client clock in the
+        // last hour would be "after capturedAt" and the whole message rejected (CONTRACT §6). It is held back.
+        var msg = SyntheticCaptures.CharacterVanilla();
+        msg.CapturedAt = "2026-10-18T13:00:10Z";
+        msg.Deaths = new List<DeathRecord>
+        {
+            new() { WorldUid = "1", X = 1, Z = 2, At = "2026-10-18T12:59:00Z" },
+            new() { WorldUid = "1", X = 3, Z = 4, At = "2026-10-18T11:00:00Z" },
+        };
+        var r = Enricher.Enrich(Client(msg), Ctx());
+        Assert.True(r.Ok, r.Reason);
+        var o = (JObject)MessageJson.Parse(r.Bytes);
+        Assert.Equal("2026-10-18T12:00:10Z", (string)o["capturedAt"]);
+        Assert.Equal(new[] { "2026-10-18T11:00:00Z" }, ((JArray)o["deaths"]).Select(d => (string)d["at"]));
+        Assert.Contains(r.Notes, n => n.Contains("1 death(s)"));
+    }
 }

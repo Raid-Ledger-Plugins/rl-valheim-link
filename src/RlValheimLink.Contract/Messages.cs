@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-// Message model for contract/v1 (CONTRACT.md §2–§5b). Property order is the
+// Message model for contract/v1 (CONTRACT.md §2–§5c). Property order is the
 // emit order. Every class maps 1:1 to a strict Zod object; there are no extra
 // properties, because an unknown key rejects the whole message upstream.
 namespace RlValheimLink.Contract
@@ -28,6 +28,20 @@ namespace RlValheimLink.Contract
         [JsonProperty("trophies", Order = 14)] public List<string> Trophies { get; set; } = new List<string>();
         [JsonProperty("knownItems", Order = 15)] public List<string> KnownItems { get; set; } = new List<string>();
         [JsonProperty("knownRecipes", Order = 16)] public List<string> KnownRecipes { get; set; } = new List<string>();
+        /// <summary>Recorded deaths, newest first (CONTRACT.md §3, ROK-1931). Optional: null = omitted (older shape).</summary>
+        [JsonProperty("deaths", Order = 17, NullValueHandling = NullValueHandling.Ignore)] public List<DeathRecord> Deaths { get; set; }
+        /// <summary>Valheim's lifetime Deaths stat (every world). Optional: null = omitted (no stat on this game build).</summary>
+        [JsonProperty("deathCount", Order = 18, NullValueHandling = NullValueHandling.Ignore)] public int? DeathCount { get; set; }
+    }
+
+    /// <summary>One death the mod recorded on the player's machine (CONTRACT.md §3 `deaths[]`).</summary>
+    public sealed class DeathRecord
+    {
+        [JsonProperty("worldUid", Order = 0)] public string WorldUid { get; set; }
+        [JsonProperty("x", Order = 1)] public double X { get; set; }
+        [JsonProperty("z", Order = 2)] public double Z { get; set; }
+        /// <summary>ISO UTC, second precision (<see cref="MessageJson.Timestamp"/>); unique per message, ≤ capturedAt.</summary>
+        [JsonProperty("at", Order = 3)] public string At { get; set; }
     }
 
     public sealed class CharacterIdentity
@@ -231,6 +245,26 @@ namespace RlValheimLink.Contract
         [JsonProperty("prefab", Order = 0)] public string Prefab { get; set; }
         [JsonProperty("quality", Order = 1)] public int Quality { get; set; }
         [JsonProperty("stack", Order = 2)] public int Stack { get; set; }
+    }
+
+    // ---------- portals (CONTRACT.md §5c) ----------
+
+    public sealed class PortalsMessage : LinkMessage
+    {
+        public override string Kind => "portals";
+        [JsonProperty("worldUid", Order = 10)] public string WorldUid { get; set; }
+        [JsonProperty("portals", Order = 11)] public List<PortalSnapshot> Portals { get; set; } = new List<PortalSnapshot>();
+        [JsonProperty("omitted", Order = 12)] public int Omitted { get; set; }
+    }
+
+    public sealed class PortalSnapshot
+    {
+        [JsonProperty("prefab", Order = 0)] public string Prefab { get; set; }
+        [JsonProperty("x", Order = 1)] public double X { get; set; }
+        /// <summary>Height; null when the scan has none (always present for a ZDO, but the contract allows null).</summary>
+        [JsonProperty("y", Order = 2)] public double? Y { get; set; }
+        [JsonProperty("z", Order = 3)] public double Z { get; set; }
+        [JsonProperty("tag", Order = 4)] public string Tag { get; set; } = "";
     }
 
     // ---------- recipes (CONTRACT.md §5b) ----------

@@ -1,5 +1,110 @@
 # Changelog
 
+## 0.5.0 — 2026-11-03
+
+**Death history** (Raid Ledger ROK-1931). Needs 0.5.0 on the **server and on every client**: the server's
+enricher now holds back deaths stamped after a server-replaced `capturedAt`, so a 0.4.x server would
+not protect a 0.5.0 client's upload. **Requires a Raid Ledger server with ROK-1931** (state: publish only
+after production has the Raid Ledger change; an older server rejects the whole character upload because
+every object in the contract is strict). A player with no recorded deaths omits the new fields and is
+unaffected.
+
+**Update order: Raid Ledger first, then the game server, then (or with) the clients.** A Raid Ledger
+server without ROK-1931 rejects **every** character upload from a 0.5.0 client that has recorded deaths
+(`400 schema_invalid` on the unknown `deaths`/`deathCount` keys), and so does a game server still on 0.4.x
+(its strict pre-send validator drops the upload). Nothing flags the mismatch earlier, because `modVersion`
+is not matched by default. Those players' character data stops updating until the server side is on 0.5.0.
+
+- The client records each death of the local player: a Harmony prefix and postfix on `Player.OnDeath`
+  (the prefix decides "local player") store the position and time in `Player.m_customData`
+  (`RlValheimLink.deaths`), newest first, capped at 200, so the history travels with the character
+  save. `Client.OptOut` is respected: nothing is recorded or sent.
+- `character.deaths[]` (position and time) and `character.deathCount` (the game's per-character Deaths
+  stat) ride along with every character capture. The Deaths stat is read by reflection
+  (`PlayerProfile.GetStat`); when the game build does not have it, `deathCount` is omitted.
+- The server's enricher drops `deaths[]` entries stamped after a `capturedAt` it replaced (client clock
+  more than 60 s ahead), so a skewed clock cannot make the whole upload fail validation.
+- Pre-send validator and mock receiver enforce the new rules (unique `at`, `at` <= `capturedAt`, 200 cap,
+  `deathCount` bounds). Contract pinned to the Raid Ledger ROK-1931 branch (additive, still v1; PIN.md
+  says pre-merge until Raid Ledger main has it).
+
+## 0.4.6 — 2026-11-01
+
+**Server-only config change.** Clients and the modpack need nothing.
+
+- `[Server] ItemsExportBy` now defaults to `anyone` (was `admins`): a new game version's item catalogue
+  and piece icons arrive on the first join of any player with the mod, not only an admin's. The groups
+  this mod serves are small and do not forge item lists; `admins` and `nobody` remain available.
+- **One-time migration of existing config files.** BepInEx keeps a value already written to the file, so
+  on first start of 0.4.6 a file that still says `ItemsExportBy = admins` (the old default) is rewritten
+  to `anyone` and the log says so once (`RLVL: config: [Server] ItemsExportBy changed from admins …`).
+  `anyone` and `nobody` are left as they are. The new internal `[Server] ConfigRevision = 1` records that
+  this ran, so it never runs again: to keep admins only, set `ItemsExportBy = admins` after the upgrade
+  and it is kept.
+- No wire-format change.
+
+## 0.4.5 — 2026-11-01
+
+**Client fix** (Raid Ledger ROK-1881). Players update the mod for their own pins to be relabelled; the
+dedicated server needs nothing new.
+
+- Map pin labels on Raid Ledger's Map tab now read as they do in game. Names the game stores as translation
+  tokens (location, boss and enemy pins, `$hud_…`) are translated with the player's language before
+  sending, rich-text tags (`<color=…>`, `<b>`, `<size=…>`, `<sprite…>`, `<#ff0000>`) are removed while
+  other text in angle brackets (`<Home>`) is kept as the game shows it, line breaks and other control
+  characters become spaces and surrounding whitespace is trimmed; a label with nothing left is sent empty. The 64-character
+  cap is applied after that, never in the middle of an emoji.
+- Which pins count as shared (from a cartography table) is unchanged and now confirmed against the game
+  code: a pin is shared when another player wrote it to the table and you have not taken it as your own.
+- Pin types added by other mods (not in the game's list) are still sent as their number and shown with a
+  generic icon; each such number is logged once per session (`RLVL: pins: pin type <n> is outside …`).
+  Labels are never logged.
+- No wire-format change.
+
+## 0.4.4 — 2026-11-01
+
+**Server-only feature** (Raid Ledger ROK-1945). Clients and the modpack need nothing.
+
+- Portals now appear on the Raid Ledger map without anyone pinning them. The dedicated server's scan finds
+  every portal in the world on the chest scan's interval (3 minutes after start, a minute after the chest
+  scan so the two never walk the world on the same tick, then every `Chests.IntervalMinutes`) and sends a full `portals` snapshot (prefab, position, pairing tag; CONTRACT.md
+  §5c), so a destroyed portal disappears at the next scan. Portal prefabs are every prefab with the game's
+  portal component, which covers vanilla `portal_wood` / `portal_stone` and portals cloned from them
+  (AdvancedPortals). XPortal appears to keep its name in the vanilla tag field (observed in the server log;
+  unverified). The prefabs are logged once (`RLVL: portal scan: <n> portal prefabs: …`), each scan as `RLVL: portal scan <n>: …`.
+- New `[Portals] Enabled` (default `true`) switches it off independently of `[Chests] Enabled`;
+  `[Portals] ExtraPrefabs` adds a modded portal without that component. Tags longer than the contract's 64
+  characters are clipped, a duplicate piece at one position is sent once, and above 4 096 portals the rest
+  is counted in `omitted`. Tags and positions are never logged. If no portal prefab is found at all (broken
+  discovery, not an empty world) nothing is sent, so Raid Ledger's portals are not wiped: one WARN
+  (`RLVL: portal scan: 0 portal prefabs found …`) and a retry at each slot. `[Portals] ExtraPrefabs` entries
+  that are not prefabs get one WARN.
+- No wire-format change (`portals` is already in the pinned contract v1).
+
+## 0.4.3 — 2026-11-01
+
+**Server-only fix** (Raid Ledger ROK-2059). Clients and the modpack need nothing.
+
+- The server counted an items export as done for (game version, mod set) as soon as it was spooled, before
+  Raid Ledger answered. When the upload was then rejected for good (413 over the size cap, 422 schema,
+  400), no client was ever asked again and the item catalogue for that game version stayed missing until
+  someone cleared the mod's state by hand. Now a spooled export is only *queued*: it becomes done when
+  Raid Ledger accepts that upload (2xx, or 409 already have it), a permanent rejection logs one WARN
+  (`items|<game> was rejected for good …`) and forgets it, so the next client allowed by
+  `Server.ItemsExportBy` that joins is asked again once a cool-down has passed: 1 h after the first
+  rejection of that (game version, mod set), doubling per further rejection up to 24 h, so a rejection that
+  repeats every time (size cap, contract drift) no longer costs a client capture and upload on every join.
+  The cool-down is kept in `index.json` (survives a restart), is logged once with the rejection, and is
+  reset when an upload for that key is accepted or the Raid Ledger target changes.
+  Transient failures (5xx, network, 429, 413 `quota_exceeded`) keep the export queued and retrying, and
+  no client is asked again meanwhile.
+- On start the server forgets "done" markers left by 0.4.2 and older whose upload was never accepted
+  (logged once), so a catalogue already stuck this way is requested again at the next eligible join.
+- An items message whose `gameVersion` differs from its client's hello is dropped (logged, the client is
+  told), so the export marker and the spooled upload cannot end up under different game versions.
+- A queued export marker whose spooled file vanished is pruned at start instead of lingering in `index.json`.
+- No wire-format change.
+
 ## 0.4.2 — 2026-10-24
 
 **Client fix** (players get it through the modpack; the server needs nothing new).
