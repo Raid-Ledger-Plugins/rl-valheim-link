@@ -306,7 +306,8 @@ client a few hundred KB of upload once per changed save.
 | `Upload.Gzip` | true | server | `Content-Encoding: gzip` on message bodies |
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
-| `Server.ItemsExportBy` | `admins` | server | who may answer `needItems` and (0.4.0) `needPieceIcons`: `admins` (adminlist.txt) / `anyone` / `nobody` |
+| `Server.ItemsExportBy` | `anyone` | server | who may answer `needItems` and (0.4.0) `needPieceIcons`: `anyone` / `admins` (adminlist.txt) / `nobody`. Default `anyone` since 0.4.6 (was `admins`): the small groups this mod serves do not forge item lists, and a new game version's catalogue arrives on the first join of any player with the mod. A file below `ConfigRevision` 1 that still says `admins` is rewritten to `anyone` once (logged); set `admins` again afterwards and it is kept |
+| `Server.ConfigRevision` | 0 | server | internal: which one-time config migrations have run (1 = the 0.4.6 `ItemsExportBy` rewrite). Do not edit |
 | `Server.WorldAllowlist` | `` | server | comma-separated world names (case-insensitive, trimmed) this server links; empty = every world. A world not listed leaves the link **idle**: no base map, every `hello` is answered `reject hello: world … is not linked`, nothing is spooled or uploaded. For one server that is sometimes booted into a test world: the character key carries no world, so a test-world session would otherwise become the character's "latest" |
 | `BaseMap.Enabled` | true | server | render the world PNG once per (world, version) |
 | `BaseMap.RowsPerTick` | 8 | server | time-slicing of the render (2048 rows ≈ 5 s of ticks at 50 Hz) |

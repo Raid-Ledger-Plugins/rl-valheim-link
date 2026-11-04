@@ -255,7 +255,7 @@ configure. Restart the server when convenient; every time below counts from the 
 ## I. Planner icons from an admin client (0.4.0; server and one admin client)
 
 Install 0.4.0 on the **server** and on **your client** (you must be allowed by `[Server] ItemsExportBy`:
-by default listed in `adminlist.txt`). Other players can stay on older versions.
+any client by default since 0.4.6; with `admins`, listed in `adminlist.txt`). Other players can stay on older versions.
 
 24. **Server start.** Section H's lines, and on the first 0.4.0 start the recipes export says
     `… icons: none (no admin client with the piece atlas yet); …`. Once a map is on file, later starts also log
