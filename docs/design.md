@@ -109,8 +109,23 @@ Game reads (all on the main thread, inside the postfix, no coroutines):
   `py * size + px`, `py = 0` south — the same layout the contract's bitset
   uses, so packing is a straight loop),
   `m_pins` where `m_save` is true (transient Player/Ping/Shout/event pins are
-  not saved and not sent); `shared = m_ownerID != 0` (UNVERIFIED: vanilla sets
-  `m_ownerID` on pins that arrived from a cartography table).
+  not saved and not sent); `shared = m_ownerID != 0`. Verified from the 0.221.4
+  IL (ROK-1881; the 1.0.20 reference assembly has the same `PinData` fields and
+  `AddPin(…, long ownerID = 0, PlatformUserID author)` signature but stripped
+  bodies): `AddSharedMapData` skips table pins whose owner is the local player and
+  adds the rest via `AddPin` with the writer's owner id; the player's own pins
+  carry 0 (`GetSharedMapData` writes them under the local player id);
+  `OnMapLeftClick` on a shared pin sets `m_ownerID = 0` (adopts it); `UpdatePins`
+  hides `m_ownerID != 0` pins when the shared layer is toggled off. There is no
+  `m_shared` field. `label` = `Localization.instance.Localize(m_name)` (names
+  can be `$…` tokens), then Core `MapPins.Label`: TextMeshPro tags stripped
+  (allow-list of TMP tag names, any case, plus `<#rgb>`/`<#rgba>`/`<#rrggbb>`/
+  `<#rrggbbaa>`; other bracketed text such as `<Home>` stays, as TMP shows it),
+  control characters (C0, DEL, C1, U+2028/2029, bidi controls) to spaces,
+  trimmed, clipped to 64 UTF-16 units, "" when nothing is left. `m_author` (platform user id) is not sent: the contract has
+  no field for it. Pin types outside the vanilla enum `ToString()` to a bare
+  integer and are sent as that integer (open type set; generic icon), logged
+  once per value.
 - Items: `ObjectDB.instance.m_items` → `ItemDrop.m_itemData.m_shared`:
   `Localization.instance.Localize(m_name)` for `name`, `m_itemType.ToString()`
   for `category`, `m_maxStackSize`, `m_maxQuality`, `m_variants`,
@@ -154,7 +169,11 @@ ZRoutedRpc "RLVL_Control"(long sender, ZPackage pkg)   server → client
 - `hello` (kind 0) is sent once per session after the local player spawns:
   `{ modVersion, gameVersion, modSetHash }`. The server answers `needItems`
   when it has no items export for (`gameVersion`, `modSetHash`) and the
-  client is allowed to export (§9 Q3). A `reject` whose arg starts with
+  client is allowed to export (§9 Q3). An export counts once Raid Ledger
+  accepted its upload (2xx/409); one still spooled for upload also stops a
+  new request (transient failures retry it), and one rejected for good
+  (400/404/413/415/422) is forgotten so the next eligible hello asks again
+  (0.4.3, ROK-2059; before that the export counted as soon as it was spooled). A `reject` whose arg starts with
   `hello: ` declines the whole session (the loaded world is not in
   `Server.WorldAllowlist`, §8): the client stops capturing until it
   reconnects; a `reject` without that prefix concerns one transfer.
@@ -300,7 +319,8 @@ client a few hundred KB of upload once per changed save.
 | `Upload.Gzip` | true | server | `Content-Encoding: gzip` on message bodies |
 | `Upload.SpoolDirectory` | `BepInEx/RLValheimLink/spool` | server | pending uploads + blob cache |
 | `Server.TrustClientSteamId` | false | server | accept the client's `steamId` claim for non-Steam peers (§9 Q2) |
-| `Server.ItemsExportBy` | `admins` | server | who may answer `needItems` and (0.4.0) `needPieceIcons`: `admins` (adminlist.txt) / `anyone` / `nobody` |
+| `Server.ItemsExportBy` | `anyone` | server | who may answer `needItems` and (0.4.0) `needPieceIcons`: `anyone` / `admins` (adminlist.txt) / `nobody`. Default `anyone` since 0.4.6 (was `admins`): the small groups this mod serves do not forge item lists, and a new game version's catalogue arrives on the first join of any player with the mod. A file below `ConfigRevision` 1 that still says `admins` is rewritten to `anyone` once (logged); set `admins` again afterwards and it is kept |
+| `Server.ConfigRevision` | 0 | server | internal: which one-time config migrations have run (1 = the 0.4.6 `ItemsExportBy` rewrite). Do not edit |
 | `Server.WorldAllowlist` | `` | server | comma-separated world names (case-insensitive, trimmed) this server links; empty = every world. A world not listed leaves the link **idle**: no base map, every `hello` is answered `reject hello: world … is not linked`, nothing is spooled or uploaded. For one server that is sometimes booted into a test world: the character key carries no world, so a test-world session would otherwise become the character's "latest" |
 | `BaseMap.Enabled` | true | server | render the world PNG once per (world, version) |
 | `BaseMap.RowsPerTick` | 8 | server | time-slicing of the render (2048 rows ≈ 5 s of ticks at 50 Hz) |
@@ -313,6 +333,8 @@ client a few hundred KB of upload once per changed save.
 | `Chests.StacksPerTick` | 200 | server | decoded stacks per server tick while a scan runs |
 | `Chests.IncludeVehicles` | true | server | also scan carts and ships (flagged `vehicle`) |
 | `Chests.ExcludePrefabs` / `ExtraPrefabs` | `incinerator` / `` | server | container prefabs never scanned / scanned although no build tool lists them |
+| `Portals.Enabled` | true | server | the portal scan (`portals`, 0.4.4, ROK-1945), dedicated servers only, on the chest scan's interval (`Chests.IntervalMinutes`) with its first slot 60 s after the chest scan's whether or not `Chests.Enabled` is on; its own switch because portals are map data, not inventory |
+| `Portals.ExtraPrefabs` | `` | server | portal prefabs scanned although they have no `TeleportWorld` component |
 | `Recipes.Enabled` | true | server | the `recipes` export (0.3.0), dedicated servers only; exists only to switch it off |
 | `Chests.DiagnosticDump` | false | server | the 0.2.1 spike's **diagnostic** (`docs/design-chests.md` §7), dedicated servers only: 2 min after every start, log `RLVL: chestdump` lines about every container; uploads nothing. Started by `Roles`, not `ServerHalf`, so it also runs on a world outside `Server.WorldAllowlist`. Off since 0.3.0 (the scan ships); replaces `Dump` (ignored) |
 | `Chests.DumpRuns` / `DumpRerunMinutes` | 2 / 10 | server | repeat the dump; each later run reports what changed (freshness) |
@@ -384,6 +406,12 @@ future per-file mode can without a contract change. Things noted for the Raid Le
 `Ping`, `EventArea`, `Hildir1-3` and `None`; only saved pins are sent.
 `ItemType` now has `Trinket`, `TwoHandedWeaponLeft`, `AmmoNonEquipable`,
 `Attach_Atgeir`, `Fish` — all open-set in the contract, so fine.
+
+**Not requested (ROK-1881 notes):** a readable name for modded pin types (a mod
+that casts a new value onto `Minimap.PinType` has no name to send; it would need
+a new optional field, i.e. a Raid Ledger contract story) and the pin author
+(`PinData.m_author`, a platform user id — personal data; also a contract story
+if ever wanted).
 
 ## 11. Verification plan
 

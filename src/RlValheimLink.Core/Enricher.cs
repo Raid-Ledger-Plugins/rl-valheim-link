@@ -123,7 +123,7 @@ namespace RlValheimLink.Core
             }
             else
             {
-                r.Key = $"items|{(string)(msg["gameVersion"] as JValue)}";
+                r.Key = Spool.ItemsKey((string)(msg["gameVersion"] as JValue));
             }
 
             var issues = Validator.Validate(msg);
@@ -139,15 +139,16 @@ namespace RlValheimLink.Core
         }
 
         /// <summary>
-        /// A message the server built itself (`containers`, `recipes`): there is no sending peer to check, so
-        /// the server sets serverId, validates and serialises; the snapshot key is (kind, world) for
-        /// containers and (kind, game version) for recipes (CONTRACT.md §5a, §5b).
+        /// A message the server built itself (`containers`, `recipes`, `portals`): there is no sending peer to
+        /// check, so the server sets serverId, validates and serialises; the snapshot key is (kind, world) for
+        /// containers and portals and (kind, game version) for recipes (CONTRACT.md §5a, §5b, §5c).
         /// </summary>
         public static EnrichResult Seal(LinkMessage message, string serverId)
         {
             var r = new EnrichResult { Kind = message?.Kind };
             if (message is ContainersMessage c) r.Key = ContainersBuilder.SpoolKey(c.WorldUid);
             else if (message is RecipesMessage) r.Key = RecipesBuilder.SpoolKey(message.GameVersion);
+            else if (message is PortalsMessage pm) r.Key = PortalsBuilder.SpoolKey(pm.WorldUid);
             else { r.Reason = "not a server-built kind"; return r; }
             message.ServerId = serverId ?? "";
             r.CapturedAt = message.CapturedAt;

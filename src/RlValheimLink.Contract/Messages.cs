@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-// Message model for contract/v1 (CONTRACT.md §2–§5b). Property order is the
+// Message model for contract/v1 (CONTRACT.md §2–§5c). Property order is the
 // emit order. Every class maps 1:1 to a strict Zod object; there are no extra
 // properties, because an unknown key rejects the whole message upstream.
 namespace RlValheimLink.Contract
@@ -245,6 +245,26 @@ namespace RlValheimLink.Contract
         [JsonProperty("prefab", Order = 0)] public string Prefab { get; set; }
         [JsonProperty("quality", Order = 1)] public int Quality { get; set; }
         [JsonProperty("stack", Order = 2)] public int Stack { get; set; }
+    }
+
+    // ---------- portals (CONTRACT.md §5c) ----------
+
+    public sealed class PortalsMessage : LinkMessage
+    {
+        public override string Kind => "portals";
+        [JsonProperty("worldUid", Order = 10)] public string WorldUid { get; set; }
+        [JsonProperty("portals", Order = 11)] public List<PortalSnapshot> Portals { get; set; } = new List<PortalSnapshot>();
+        [JsonProperty("omitted", Order = 12)] public int Omitted { get; set; }
+    }
+
+    public sealed class PortalSnapshot
+    {
+        [JsonProperty("prefab", Order = 0)] public string Prefab { get; set; }
+        [JsonProperty("x", Order = 1)] public double X { get; set; }
+        /// <summary>Height; null when the scan has none (always present for a ZDO, but the contract allows null).</summary>
+        [JsonProperty("y", Order = 2)] public double? Y { get; set; }
+        [JsonProperty("z", Order = 3)] public double Z { get; set; }
+        [JsonProperty("tag", Order = 4)] public string Tag { get; set; } = "";
     }
 
     // ---------- recipes (CONTRACT.md §5b) ----------

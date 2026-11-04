@@ -37,7 +37,10 @@ public class SpoolTests : IDisposable
         var sha = new string('c', 64);
         s.PutBlob(sha, new byte[] { 1 }, 1, 1, DateTime.UtcNow);
         s.MarkBlobUploaded(sha);                                     // file deleted after upload
-        s.MarkItemsExport("1.0.20", "h", "2026-10-19T20:00:00Z");
+        s.Put("items", Spool.ItemsKey("1.0.20"), "2026-10-19T20:00:00Z", new byte[] { 1 }, Array.Empty<string>(), DateTime.UtcNow);
+        s.MarkItemsExportQueued("1.0.20", "h", "2026-10-19T20:00:00Z");
+        s.MarkUploaded(s.Pending()[0]);                              // Raid Ledger accepted it
+        Assert.Equal(ItemsExportStatus.Accepted, s.ItemsExportState("1.0.20", "h"));
         s.Put("character", "character|a|1", "2026-10-19T20:00:00Z", new byte[] { 1 }, Array.Empty<string>(), DateTime.UtcNow);
         s.MarkUploaded(s.Pending()[0]);
         Assert.False(s.ResetIfTargetChanged("t1"));                 // same target: no-op
@@ -59,7 +62,9 @@ public class SpoolTests : IDisposable
         s.MarkBlobUploaded(sha);
         Assert.True(s.IsBlobUploaded(sha)); Assert.False(File.Exists(s.BlobPath(sha)));
         Assert.False(s.HasItemsExport("0.221.4", "h"));
-        s.MarkItemsExport("0.221.4", "h", "2026-10-18T12:00:00Z");
+        s.Put("items", Spool.ItemsKey("0.221.4"), "2026-10-18T12:00:00Z", new byte[] { 1 }, Array.Empty<string>(), DateTime.UtcNow);
+        s.MarkItemsExportQueued("0.221.4", "h", "2026-10-18T12:00:00Z");
+        s.MarkUploaded(s.Pending()[0]);
         Assert.True(new Spool(_dir).HasItemsExport("0.221.4", "h"));
     }
 }

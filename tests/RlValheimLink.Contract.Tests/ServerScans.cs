@@ -60,6 +60,28 @@ public static class ServerScans
 
     public static ContainersMessage ContainersScan() => ContainersBuilder.Build(ContainersHeader(), Containers(), out _);
 
+    // ---------- portals (CONTRACT.md §5c) ----------
+
+    /// <summary>
+    /// What Server/PortalScanner hands to PortalsBuilder, unsorted: vanilla wood and stone portals, an
+    /// untagged one, AdvancedPortals-style prefabs (names as the contract's own fixture spells them; the live
+    /// prefab names are UNVERIFIED), a duplicate piece at one rounded position and a long modded tag that the
+    /// builder clips to 64 chars. Tags and positions are invented.
+    /// </summary>
+    public static List<ScannedPortal> Portals() => new()
+    {
+        new() { Prefab = "portal_wood", X = 512.04, Y = 33.21, Z = -140.66, Tag = "home" },
+        new() { Prefab = "portal_stone", X = -3020.5, Y = 61.0, Z = 1800.25, Tag = "plains hub" },
+        new() { Prefab = "portal_wood", X = 2256.2, Y = 31.2, Z = 792.9, Tag = "home" },
+        new() { Prefab = "portal_wood", X = 2249.7, Y = 30.0, Z = 784.1, Tag = "" },
+        new() { Prefab = "portal_blackmarble", X = 5020.0, Y = 120.0, Z = -4400.5, Tag = "mistlands" },
+        new() { Prefab = "portal_obsidian", X = 900.0, Y = 45.5, Z = 900.0, Tag = new string('g', 70) },
+        // Two overlapping pieces at one rounded position: one portal is sent.
+        new() { Prefab = "portal_wood", X = 512.0, Y = 33.2, Z = -140.7, Tag = "home" },
+    };
+
+    public static PortalsMessage PortalsScan() => PortalsBuilder.Build(ContainersHeader(), Portals(), out _);
+
     // ---------- recipes ----------
 
     static RecipeResource R(string prefab, int amount, int perLevel = 0, bool recover = true, bool upgrader = false) =>
